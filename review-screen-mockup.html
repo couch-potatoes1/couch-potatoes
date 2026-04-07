@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Review screen mockup — Couch Potatoes</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0a0814; font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; color: white; }
+  .gradient-cta { background: linear-gradient(to right, #f97316, #f43f5e); }
+  .secondary-btn { background: #1a1825; border: 1px solid #2a2838; }
+  .secondary-btn:hover { background: #221f2e; }
+  .frame { background: #0a0814; border: 1px solid #1f1d2a; border-radius: 28px; }
+  .screen-label { letter-spacing: 0.06em; }
+  .divider { background: #1f1d2a; }
+</style>
+</head>
+<body class="min-h-screen p-10">
+  <div class="max-w-[1400px] mx-auto">
+    <header class="mb-10">
+      <h1 class="text-2xl font-bold mb-1">Profile review screen — proposed layout</h1>
+      <p class="text-gray-400 text-sm">Three intents, no destructive escape hatch. Two states depending on whether the user named a partner.</p>
+    </header>
+
+    <!-- BEFORE / AFTER comparison -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- BEFORE -->
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] uppercase tracking-wider text-gray-500 px-2 py-0.5 rounded bg-gray-800">Before</span>
+          <span class="text-xs text-gray-500">Current screen</span>
+        </div>
+        <div class="frame p-8">
+          <div class="flex items-start justify-between mb-2">
+            <span class="text-[11px] font-semibold text-gray-500 screen-label">PREFERENCES</span>
+            <button class="text-orange-400 text-sm font-medium">Edit</button>
+          </div>
+          <p class="text-gray-500 text-sm mb-6">No preferences set</p>
+          <div class="divider h-px mb-6"></div>
+
+          <button class="secondary-btn w-full py-4 rounded-2xl text-white font-medium mb-3">
+            Set up Partner 2's profile
+          </button>
+          <button class="gradient-cta w-full py-4 rounded-2xl text-white font-bold text-lg mb-5">
+            Invite your partner
+          </button>
+          <div class="text-center">
+            <button class="text-gray-500 text-sm">Start over</button>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 leading-relaxed">
+          "Set up Partner 2's profile" exposes the data model. Solo mode is hidden inside "Start over," which is destructive and nobody clicks it on a happy path.
+        </p>
+      </div>
+
+      <!-- AFTER — partner named -->
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] uppercase tracking-wider text-emerald-300 px-2 py-0.5 rounded bg-emerald-900/40">After · partner named</span>
+        </div>
+        <div class="frame p-8">
+          <div class="flex items-start justify-between mb-2">
+            <span class="text-[11px] font-semibold text-gray-500 screen-label">PREFERENCES</span>
+            <button class="text-orange-400 text-sm font-medium">Edit</button>
+          </div>
+          <p class="text-gray-500 text-sm mb-6">No preferences set</p>
+          <div class="divider h-px mb-6"></div>
+
+          <button class="gradient-cta w-full py-4 rounded-2xl text-white font-bold text-lg mb-3">
+            Invite Sam
+          </button>
+          <button class="secondary-btn w-full py-4 rounded-2xl text-white font-medium mb-5">
+            I'll fill it out for them
+          </button>
+          <div class="text-center">
+            <button class="text-gray-400 hover:text-white text-sm transition-colors">
+              Get recommendations just for me
+            </button>
+          </div>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 leading-relaxed">
+          Three intents in priority order: invite, fill in for them, or go solo. Solo is visible but quiet — it's a real option, not a panic button.
+        </p>
+      </div>
+
+      <!-- AFTER — solo from start -->
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[10px] uppercase tracking-wider text-emerald-300 px-2 py-0.5 rounded bg-emerald-900/40">After · no partner named</span>
+        </div>
+        <div class="frame p-8">
+          <div class="flex items-start justify-between mb-2">
+            <span class="text-[11px] font-semibold text-gray-500 screen-label">PREFERENCES</span>
+            <button class="text-orange-400 text-sm font-medium">Edit</button>
+          </div>
+          <p class="text-gray-500 text-sm mb-6">No preferences set</p>
+          <div class="divider h-px mb-6"></div>
+
+          <button class="gradient-cta w-full py-4 rounded-2xl text-white font-bold text-lg mb-3">
+            Invite your partner
+          </button>
+          <button class="secondary-btn w-full py-4 rounded-2xl text-white font-medium mb-5">
+            Get recommendations just for me
+          </button>
+          <div class="h-4"></div>
+        </div>
+        <p class="text-xs text-gray-500 mt-3 leading-relaxed">
+          When no partner name was entered, "fill it out for them" makes no sense — there's no them. Solo gets promoted to a real secondary CTA.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- copy notes -->
+    <div class="mt-12 p-6 rounded-2xl border border-gray-800 bg-gray-900/30 max-w-3xl">
+      <p class="text-sm font-semibold text-gray-200 mb-3">What changed</p>
+      <ul class="text-sm text-gray-400 space-y-2 leading-relaxed">
+        <li>· "Set up Partner 2's profile" → "I'll fill it out for them" (intent, not data model)</li>
+        <li>· "Invite your partner" → "Invite [name]" when a partner name exists</li>
+        <li>· "Start over" removed from this screen entirely</li>
+        <li>· Solo path promoted from hidden tertiary to a real visible option</li>
+        <li>· On the no-partner variant, the "fill in for them" button is hidden so the stack doesn't feel redundant</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

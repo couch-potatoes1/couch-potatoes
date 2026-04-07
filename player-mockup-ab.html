@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Player view — A vs B</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0b1220; color: #e5e7eb; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .device { width: 380px; background: #0f172a; border: 1px solid #1f2a44; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden; }
+  .player-area { background: linear-gradient(135deg, #1a1d2e, #0a0d18); position: relative; }
+  .player-area::before {
+    content: "▶";
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px; color: rgba(251, 146, 60, 0.6);
+  }
+  .player-area::after {
+    content: "Trailer playing";
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b;
+  }
+  .label-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 10px; font-weight: 600; }
+  .annot { font-size: 12px; color: #94a3b8; margin-top: 12px; max-width: 380px; line-height: 1.55; }
+  .annot strong { color: #cbd5e1; }
+  .pill-good { color: #6ee7b7; }
+  .pill-warn { color: #fcd34d; }
+  .divider { border-top: 1px solid #1e293b; margin: 12px 0; }
+</style>
+</head>
+<body class="p-10">
+
+  <h1 class="text-2xl font-bold mb-2">Player options — A vs B</h1>
+  <p class="text-slate-400 text-sm mb-10 max-w-2xl">Both options play the trailer at the <strong class="text-slate-200">same full-width 16:9 size</strong>. The difference is what else is on screen with it, and how you stop watching.</p>
+
+  <div class="flex gap-12 flex-wrap">
+
+    <!-- ============ OPTION A ============ -->
+    <div>
+      <div class="label-tag">Option A — Inline (poster row becomes the player)</div>
+      <div class="device">
+        <div class="relative px-5 pt-5 pb-6">
+          <!-- Drag handle -->
+          <div class="mx-auto mb-3" style="width:36px;height:4px;border-radius:2px;background:#334155;"></div>
+          <!-- Top-right modal X -->
+          <button class="absolute top-4 right-5 text-gray-500 z-10">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+
+          <!-- FULL-WIDTH PLAYER (replaces the poster row) -->
+          <div class="player-area rounded-xl mt-3" style="aspect-ratio: 16/9;"></div>
+
+          <!-- Title + meta restacked BELOW the player -->
+          <div class="mt-3">
+            <h2 class="text-lg font-bold leading-tight mb-0.5">Goblin</h2>
+            <div class="flex items-center gap-1.5 text-slate-500 text-xs mb-1.5">
+              <span>2016</span><span>·</span><span>1h 25m</span>
+              <span class="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded">TV</span>
+            </div>
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-xs text-amber-300">★ 8.6</span>
+              <span class="text-xs text-emerald-400">94%</span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">Romance</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">Fantasy</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">Drama</span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Why you'd like this — still visible -->
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Why you'd like this <span class="text-orange-400">✦</span></div>
+            <p class="text-[13px] text-slate-200 leading-snug"><span class="text-orange-300 font-semibold">Alex:</span> Immortal beings and doomed love across centuries — epic scope with a bittersweet charm.</p>
+          </div>
+        </div>
+      </div>
+      <p class="annot">
+        <strong>One close button only</strong> — the modal × in the top-right.<br>
+        <span class="pill-good">✓</span> Trailer is full-width 16:9, same size as Option B<br>
+        <span class="pill-good">✓</span> Title, rating, and "Why you'd like this" stay visible<br>
+        <span class="pill-good">✓</span> No ambiguous second X or back button anywhere<br>
+        <span class="pill-warn">~</span> To stop watching: hit the modal × or scroll past
+      </p>
+    </div>
+
+    <!-- ============ OPTION B ============ -->
+    <div>
+      <div class="label-tag">Option B — Takeover with × inside the player</div>
+      <div class="device">
+        <div class="relative px-5 pt-5 pb-6">
+          <!-- Drag handle -->
+          <div class="mx-auto mb-3" style="width:36px;height:4px;border-radius:2px;background:#334155;"></div>
+          <!-- Top-right modal X -->
+          <button class="absolute top-4 right-5 text-gray-500 z-10">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+
+          <!-- FULL-WIDTH PLAYER with × in its own corner -->
+          <div class="player-area rounded-xl mt-3 relative" style="aspect-ratio: 16/9;">
+            <button class="absolute top-2 right-2 z-10 flex items-center justify-center"
+                    style="width:30px;height:30px;border-radius:999px;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);color:white;border:1px solid rgba(255,255,255,0.15);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <!-- Why you'd like this — title/meta hidden during takeover -->
+          <div class="mt-5">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Why you'd like this <span class="text-orange-400">✦</span></div>
+            <p class="text-[13px] text-slate-200 leading-snug"><span class="text-orange-300 font-semibold">Alex:</span> Immortal beings and doomed love across centuries — epic scope with a bittersweet charm.</p>
+          </div>
+        </div>
+      </div>
+      <p class="annot">
+        <strong>Two close buttons</strong>, but visually distinct — modal × in the chrome, player × <em>inside</em> the video frame on a dark pill.<br>
+        <span class="pill-good">✓</span> Trailer is full-width 16:9, same size as Option A<br>
+        <span class="pill-good">✓</span> Dedicated "stop trailer, return to detail" affordance<br>
+        <span class="pill-warn">~</span> Title, year, rating, genres are hidden while the trailer is up<br>
+        <span class="pill-warn">~</span> The two ×'s are still close together — risk of misclick
+      </p>
+    </div>
+
+  </div>
+
+  <div class="mt-12 max-w-3xl text-sm text-slate-400 leading-relaxed border-t border-slate-800 pt-8">
+    <h2 class="text-base font-bold text-slate-200 mb-3">Quick reality check</h2>
+    <p>Both players are <strong class="text-slate-200">identical in size</strong> — full content width, 16:9 aspect ratio. Option A is the same size as Option B. The "no tiny video" worry isn't actually at play here; that would only be true if the trailer literally replaced the 90×135 poster thumbnail, which is not what either option does.</p>
+    <p class="mt-3">The real tradeoff is: <strong class="text-slate-200">A keeps the title/rating/genres visible during playback</strong> (so you can see what you're watching as you watch), while <strong class="text-slate-200">B gives you a dedicated "stop the trailer" button</strong> at the cost of hiding that metadata.</p>
+  </div>
+
+</body>
+</html>
