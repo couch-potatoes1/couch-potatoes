@@ -270,7 +270,21 @@
       try {
         const existing = localStorage.getItem("cp_householdId");
         if (existing) return existing;
-        const fresh = "cp_" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+        // Use crypto.randomUUID() for cryptographically secure IDs.
+        // The household ID is the only credential to access a household, so it
+        // needs real entropy — Math.random() is predictable enough that a
+        // sophisticated attacker could in theory narrow the search space.
+        // Fall back to crypto.getRandomValues, then to Math.random as last resort.
+        let fresh;
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          fresh = "cp_" + window.crypto.randomUUID().replace(/-/g, "");
+        } else if (window.crypto && window.crypto.getRandomValues) {
+          const buf = new Uint8Array(16);
+          window.crypto.getRandomValues(buf);
+          fresh = "cp_" + Array.from(buf, b => b.toString(16).padStart(2, "0")).join("");
+        } else {
+          fresh = "cp_" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+        }
         localStorage.setItem("cp_householdId", fresh);
         return fresh;
       } catch { return "cp_demo"; }
@@ -342,7 +356,7 @@
       14: { icon: "🧙", color: "#6366F1", label: "Fantasy" },
       36: { icon: "📜", color: "#92400E", label: "History" },
       27: { icon: "👻", color: "#991B1B", label: "Horror" },
-      10402: { icon: "🎵", color: "#06B6D4", label: "Music" },
+      10402: { icon: "🎵", color: "#06B6D4", label: "Musicals" },
       9648: { icon: "🔍", color: "#6366F1", label: "Mystery" },
       10749: { icon: "💕", color: "#EC4899", label: "Romance" },
       878: { icon: "🚀", color: "#06B6D4", label: "Sci-Fi" },
@@ -719,7 +733,7 @@ Output ONLY the paragraph.`;
       { id: 99917, label: "Foreign/Intl", icon: "🌍" },
       { id: 36, label: "History", icon: "📜" },
       { id: 27, label: "Horror", icon: "👻" },
-      { id: 10402, label: "Music", icon: "🎵" },
+      { id: 10402, label: "Musicals", icon: "🎵" },
       { id: 9648, label: "Mystery", icon: "🔍" },
       { id: 10749, label: "Romance", icon: "💕" },
       { id: 878, label: "Sci-Fi", icon: "🚀" },
@@ -1881,6 +1895,9 @@ Output ONLY the line.`;
       const [showResetConfirm, setShowResetConfirm] = useState(false);
       const [showMoreServices, setShowMoreServices] = useState(false);
       const [handoffCopied, setHandoffCopied] = useState(false);
+      // 'terms' | 'privacy' | null — controls the legal-doc modal overlay
+      // shown from the welcome-screen footer.
+      const [legalModal, setLegalModal] = useState(null);
       // TODO: "Save across devices" login prompt — stub for future auth layer.
       // When we wire up Firebase/magic-link auth, trigger this once the user has
       // completed onboarding AND opened the recs screen ≥ N times. On dismiss,
@@ -3515,35 +3532,62 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
 
           {/* ═══ WELCOME ═══ */}
           {screen === S.WELCOME && (
-            <div className="flex-1 flex flex-col items-center justify-center px-8 max-w-[600px] mx-auto w-full">
-              <div className="mb-12 text-center">
-                <div className="text-7xl mb-6">🥔</div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3">Couch Potatoes</h1>
-                <p className="text-gray-300 text-lg leading-snug max-w-[360px] mx-auto">For couples who can't agree on what to watch.</p>
+            <div className="flex-1 overflow-y-auto w-full"><div className="flex flex-col items-center px-8 pt-6 max-w-[600px] mx-auto w-full min-h-full">
+              <div className="flex-1 flex flex-col items-center justify-center w-full py-10">
+                <div className="mb-12 text-center">
+                  <div className="text-7xl mb-6">🥔</div>
+                  <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3">Couch Potatoes</h1>
+                  <p className="text-gray-300 text-lg leading-snug max-w-[360px] mx-auto">For couples who can't agree on what to watch.</p>
+                </div>
+                {/* Dev-mode "API keys missing" banner removed — keys are now server-side
+                    via Supabase edge function proxies. */}
+                {profile1.name && profile2.name && profile1.genres.length > 0 && profile2.genres.length > 0 ? (
+                  <div className="w-full space-y-3">
+                    <button onClick={() => goTo(S.SESSION_PREFS)}
+                      className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                      Welcome back, {profile1.name} & {profile2.name}
+                    </button>
+                    <button onClick={() => goTo(S.SETUP)}
+                      className="w-full py-3 bg-gray-800 border border-gray-700 rounded-2xl text-sm text-gray-300 active:scale-95">
+                      New profiles
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full">
+                    <button onClick={() => goTo(S.SETUP)}
+                      className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                      Get Started
+                    </button>
+                    <p className="text-gray-600 text-xs mt-4 text-center">Stop scrolling. Start watching.</p>
+                  </div>
+                )}
               </div>
-              {/* Dev-mode "API keys missing" banner removed — keys are now server-side
-                  via Supabase edge function proxies. */}
-              {profile1.name && profile2.name && profile1.genres.length > 0 && profile2.genres.length > 0 ? (
-                <div className="w-full space-y-3">
-                  <button onClick={() => goTo(S.SESSION_PREFS)}
-                    className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
-                    Welcome back, {profile1.name} & {profile2.name}
-                  </button>
-                  <button onClick={() => goTo(S.SETUP)}
-                    className="w-full py-3 bg-gray-800 border border-gray-700 rounded-2xl text-sm text-gray-300 active:scale-95">
-                    New profiles
-                  </button>
+              {/* Footer — branded mini, pinned to bottom of welcome screen */}
+              <footer className="w-full border-t border-gray-800/80 mt-8">
+                <div className="py-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">🥔</span>
+                    <span className="text-sm font-semibold text-gray-300">Couch Potatoes</span>
+                  </div>
+                  <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
+                    For couples who can't agree on what to watch.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[11px] text-gray-600">
+                    <span>© 2026 Couch Potatoes</span>
+                    <span className="flex gap-3">
+                      <button onClick={() => setLegalModal('terms')} className="hover:text-gray-300 transition">Terms</button>
+                      <span className="text-gray-700">·</span>
+                      <button onClick={() => setLegalModal('privacy')} className="hover:text-gray-300 transition">Privacy</button>
+                      <span className="text-gray-700">·</span>
+                      <a href="mailto:help@couchpotatoes.co" className="hover:text-gray-300 transition">Contact</a>
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-700 mt-4 leading-snug">
+                    Movie and TV data from <a href="https://www.themoviedb.org" target="_blank" rel="noopener" className="underline hover:text-gray-500">TMDB</a>. Not endorsed by TMDB.
+                  </p>
                 </div>
-              ) : (
-                <div className="w-full">
-                  <button onClick={() => goTo(S.SETUP)}
-                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
-                    Get Started
-                  </button>
-                  <p className="text-gray-600 text-xs mt-4 text-center">Stop scrolling. Start watching.</p>
-                </div>
-              )}
-            </div>
+              </footer>
+            </div></div>
           )}
 
           {/* ═══ SETUP ═══ */}
@@ -4686,6 +4730,127 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     )}
                   </div>
 
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ LEGAL MODAL (Terms / Privacy) ═══ */}
+          {legalModal && (
+            <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm fade-in" onClick={() => setLegalModal(null)} />
+              <div className="relative w-full md:w-[640px] bg-gray-900 border border-gray-700 md:rounded-2xl rounded-t-3xl max-h-[88vh] md:max-h-[85vh] flex flex-col slide-up md:fade-in">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900 md:rounded-t-2xl rounded-t-3xl">
+                  <h2 className="text-lg font-semibold text-gray-100">{legalModal === 'terms' ? 'Terms of Service' : 'Privacy Policy'}</h2>
+                  <button onClick={() => setLegalModal(null)} className="text-gray-500 hover:text-white p-2 -mr-2 active:scale-95" aria-label="Close">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <div className="overflow-y-auto px-6 py-5 text-sm text-gray-300 leading-relaxed space-y-4">
+                  {legalModal === 'terms' ? (
+                    <React.Fragment>
+                      <p className="text-xs text-gray-500"><strong>Last updated:</strong> April 6, 2026</p>
+                      <p>Welcome to Couch Potatoes. These terms describe what Couch Potatoes is, what you can expect from us, and what we expect from you. We've kept them short and in plain English on purpose.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">1. What Couch Potatoes is</h3>
+                      <p>Couch Potatoes is a free web app that helps couples (or solo viewers) decide what to watch together. You set up a household, you and your partner each pick a few favorites, and the app suggests movies and TV shows you'd both enjoy.</p>
+                      <p>Couch Potatoes is operated as a personal project. It is not affiliated with, endorsed by, or connected to any other company, product, or open-source project that uses a similar name.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">2. The service is free and provided "as is"</h3>
+                      <p>Couch Potatoes is free to use. We don't charge you, we don't sell ads, and we don't sell your data to anyone.</p>
+                      <p>Because the service is free and offered without warranty, you use it at your own risk. We do our best to keep it running and to recommend movies and shows you'll enjoy, but we can't promise that the app will always be available, that recommendations will always be perfect, that data will never be lost, or that the app will be free of bugs. To the maximum extent allowed by law, Couch Potatoes is provided "as is" with no warranties of any kind, and we are not liable for any damages arising from your use of the service.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">3. What you can do</h3>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>Use Couch Potatoes for personal, non-commercial movie and TV picking.</li>
+                        <li>Set up a household and invite a partner.</li>
+                        <li>Stop using the app at any time, for any reason.</li>
+                      </ul>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">4. What you shouldn't do</h3>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>Don't try to break, abuse, scrape, or overload the service.</li>
+                        <li>Don't use Couch Potatoes for anything illegal.</li>
+                        <li>Don't try to access other users' households or data.</li>
+                        <li>Don't reverse-engineer or attempt to extract our API keys or backend secrets.</li>
+                      </ul>
+                      <p>If you do any of these, we may block your access without notice.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">5. Movie and TV data</h3>
+                      <p>Movie and TV titles, posters, descriptions, and metadata come from <strong>The Movie Database (TMDB)</strong>. Couch Potatoes uses the TMDB API but is not endorsed or certified by TMDB. All movie and TV data is © its respective owners.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">6. Changes</h3>
+                      <p>We may update these terms from time to time. If we make significant changes, we'll update the "Last updated" date at the top. Continued use of the app after a change means you accept the new terms.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">7. Contact</h3>
+                      <p>Questions, concerns, or want your data deleted? Email <a href="mailto:help@couchpotatoes.co" className="text-orange-300 underline">help@couchpotatoes.co</a> and we'll get back to you.</p>
+                    </React.Fragment>
+                  ) : (
+                    <React.Fragment>
+                      <p className="text-xs text-gray-500"><strong>Last updated:</strong> April 6, 2026</p>
+                      <p>This is the short, plain-English version of how Couch Potatoes handles your data. The TL;DR is: we collect the minimum we need to make the app work, we don't sell anything to anyone, we don't run analytics or tracking pixels, and you can delete your data by emailing us.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">What we collect</h3>
+                      <p>When you use Couch Potatoes, we store:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li><strong>A household ID</strong> — a random string that identifies your household so you and your partner can sync.</li>
+                        <li><strong>First names</strong> — the names you and your partner enter during onboarding (e.g. "Alex" and "Chris"). These are only shown inside your own household.</li>
+                        <li><strong>Favorites</strong> — the movies and TV shows you mark as favorites to help us learn your taste.</li>
+                        <li><strong>Watch state</strong> — which movies and shows you've seen, liked, dismissed, or saved for later.</li>
+                        <li><strong>Session preferences</strong> — your "tonight's vibe" picks (mood, runtime, etc.).</li>
+                        <li><strong>Generated taste profile</strong> — a short summary of your viewing preferences derived from your favorites.</li>
+                      </ul>
+                      <p>That's it. We do <strong>not</strong> collect your email, phone number, address, payment info, IP address (beyond standard server logs), or any other personally identifying information.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">What we do NOT collect</h3>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>No analytics (no Google Analytics, no Mixpanel, no Hotjar, no pixels)</li>
+                        <li>No advertising trackers</li>
+                        <li>No third-party cookies</li>
+                        <li>No social media integrations</li>
+                        <li>No payment information</li>
+                        <li>No location data</li>
+                      </ul>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Where your data lives</h3>
+                      <p>Your household data is stored in a Postgres database hosted by <strong>Supabase</strong> (running on AWS in the <strong>us-east-1</strong> region, North Virginia, United States). Movie and TV metadata (titles, posters, descriptions) is fetched from <strong>The Movie Database (TMDB)</strong> when you use the app.</p>
+                      <p>When the app generates a personalized "why you'd like this" note for a recommendation, the request goes through our server-side proxy to <strong>Anthropic's Claude API</strong>. The prompt sent to Anthropic contains your first name and the title of the movie or show — nothing else. Anthropic processes the request to generate the response and does not use it to train models. See Anthropic's privacy policy for details.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Cookies and local storage</h3>
+                      <p>Couch Potatoes uses your browser's <strong>localStorage</strong> to remember your household ID so you don't have to sign in every time you open the app. This is the only thing we store in your browser, and it's strictly necessary for the app to work — under GDPR and similar laws, "strictly necessary" storage doesn't require a consent banner. We do not use any tracking cookies, advertising cookies, or analytics cookies.</p>
+                      <p>If you clear your browser's site data, your local household ID will be removed and you'll need to enter it again to get back into your household.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">A note on access</h3>
+                      <p>Your household ID is the only credential needed to access your household. Anyone you share it with — or anyone who sees it on your screen or in your browser — will have full access to view and modify your household's data, including your favorites, watch state, and profile names. Treat it like a password: only share it with the partner you're watching with, and don't post it publicly.</p>
+                      <p>We can't currently revoke access for someone you've shared your household ID with. If you need to "kick someone out," email us and we'll help you migrate to a new household ID.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Sharing your data</h3>
+                      <p>We don't share your data with anyone. We don't sell it. We don't license it. The only third parties that ever touch your data are:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li><strong>Supabase</strong> — stores it (they're our database host)</li>
+                        <li><strong>TMDB</strong> — provides the movie metadata you see (they don't receive your data)</li>
+                        <li><strong>Anthropic</strong> — processes "why you'd like this" prompts (they receive only your first name + a movie title)</li>
+                        <li><strong>Cloudflare</strong> — serves the website (standard CDN logs)</li>
+                      </ul>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Your rights</h3>
+                      <p>You can:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li><strong>See your data</strong> — email us and we'll send you everything we have on your household.</li>
+                        <li><strong>Delete your data</strong> — email us with your household ID and we'll permanently delete it from the database.</li>
+                        <li><strong>Stop using the app</strong> — at any time, for any reason. Clearing your browser's site data removes your local copy immediately.</li>
+                      </ul>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Children</h3>
+                      <p>Couch Potatoes is not directed at children under 13 and we do not knowingly collect data from them. If you believe a child has used the app and provided data, email us and we'll delete it.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Changes</h3>
+                      <p>If we change how we handle data, we'll update this page and bump the "Last updated" date. If we ever start collecting more than what's listed here, we'll make it obvious before doing so.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Contact</h3>
+                      <p>Questions, concerns, data requests? Email <a href="mailto:help@couchpotatoes.co" className="text-orange-300 underline">help@couchpotatoes.co</a>.</p>
+                    </React.Fragment>
+                  )}
                 </div>
               </div>
             </div>
