@@ -1591,26 +1591,40 @@ Output ONLY the line.`;
                 const templateNote2 = hasPartner ? getWhyNote(profile2, tasteDNA2) : null;
                 const hasLLM = !!anthropicKey;
                 const isLoading = hasLLM && llmNotes.loading;
-                const note1 = (hasLLM && llmNotes.note1) ? llmNotes.note1 : templateNote1;
-                const note2 = hasPartner ? ((hasLLM && llmNotes.note2) ? llmNotes.note2 : templateNote2) : null;
-                const showNote1 = isLoading ? templateNote1 : note1;
-                const showNote2 = isLoading ? templateNote2 : note2;
-                if (!showNote1 && !showNote2) return null;
+                // Final note values once the LLM call resolves (or template fallbacks if no LLM).
+                const finalNote1 = (hasLLM && llmNotes.note1) ? llmNotes.note1 : templateNote1;
+                const finalNote2 = hasPartner ? ((hasLLM && llmNotes.note2) ? llmNotes.note2 : templateNote2) : null;
+                if (!isLoading && !finalNote1 && !finalNote2) return null;
+                // Skeleton shimmer rows shown while the LLM call is in flight, instead of
+                // briefly flashing the deterministic template text and then swapping it.
+                const Skeleton = ({ accentClass, nameLabel }) => (
+                  <p className="text-[13px] leading-snug mb-1 flex items-center gap-2">
+                    <span className={`${accentClass} font-medium`}>{nameLabel}:</span>
+                    <span className="flex-1 flex flex-col gap-1.5">
+                      <span className="block h-2.5 rounded bg-gray-700/60 animate-pulse" style={{width: "92%"}}></span>
+                      <span className="block h-2.5 rounded bg-gray-700/60 animate-pulse" style={{width: "68%"}}></span>
+                    </span>
+                  </p>
+                );
                 return (
                   <div className="mb-4 pb-3 border-b border-gray-800">
                     <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">Why you'd like this{hasLLM && <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="inline-block"><path d="M8 0l1.5 5.5L16 8l-6.5 2.5L8 16l-1.5-5.5L0 8l6.5-2.5z" fill="currentColor" opacity="0.5"/></svg>}{isLoading && <span className="ml-0.5 text-orange-400/50 normal-case tracking-normal animate-pulse">personalizing...</span>}</p>
-                    {showNote1 && (
-                      <p className={`text-[13px] leading-snug mb-1 transition-opacity duration-300 ${isLoading ? "opacity-50" : "opacity-100"}`}>
+                    {isLoading ? (
+                      <Skeleton accentClass="text-orange-300" nameLabel={profile1.name} />
+                    ) : finalNote1 && (
+                      <p className="text-[13px] leading-snug mb-1 transition-opacity duration-300 opacity-100">
                         <span className="text-orange-300 font-medium">{profile1.name}:</span>{" "}
-                        <span className="text-gray-300">{showNote1}</span>
+                        <span className="text-gray-300">{finalNote1}</span>
                       </p>
                     )}
-                    {showNote2 && (
-                      <p className={`text-[13px] leading-snug transition-opacity duration-300 ${isLoading ? "opacity-50" : "opacity-100"}`}>
+                    {hasPartner && (isLoading ? (
+                      <Skeleton accentClass="text-amber-300" nameLabel={profile2.name} />
+                    ) : finalNote2 && (
+                      <p className="text-[13px] leading-snug transition-opacity duration-300 opacity-100">
                         <span className="text-amber-300 font-medium">{profile2.name}:</span>{" "}
-                        <span className="text-gray-300">{showNote2}</span>
+                        <span className="text-gray-300">{finalNote2}</span>
                       </p>
-                    )}
+                    ))}
                   </div>
                 );
               })()}
