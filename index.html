@@ -1896,8 +1896,30 @@ Output ONLY the line.`;
       const [showMoreServices, setShowMoreServices] = useState(false);
       const [handoffCopied, setHandoffCopied] = useState(false);
       // 'terms' | 'privacy' | null — controls the legal-doc modal overlay
-      // shown from the welcome-screen footer.
+      // shown from the global footer.
       const [legalModal, setLegalModal] = useState(null);
+
+      // Toast shown after the Contact link copies the email to clipboard.
+      const [contactToast, setContactToast] = useState(false);
+      const contactToastTimer = useRef(null);
+      const copyContactEmail = () => {
+        const email = "help@couchpotatoes.co";
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(email);
+          } else {
+            // Fallback for older browsers / non-secure contexts
+            const ta = document.createElement("textarea");
+            ta.value = email; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand("copy"); } catch {}
+            document.body.removeChild(ta);
+          }
+        } catch {}
+        setContactToast(true);
+        if (contactToastTimer.current) clearTimeout(contactToastTimer.current);
+        contactToastTimer.current = setTimeout(() => setContactToast(false), 2200);
+      };
       // TODO: "Save across devices" login prompt — stub for future auth layer.
       // When we wire up Firebase/magic-link auth, trigger this once the user has
       // completed onboarding AND opened the recs screen ≥ N times. On dismiss,
@@ -3562,31 +3584,6 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   </div>
                 )}
               </div>
-              {/* Footer — branded mini, pinned to bottom of welcome screen */}
-              <footer className="w-full border-t border-gray-800/80 mt-8">
-                <div className="py-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-lg">🥔</span>
-                    <span className="text-sm font-semibold text-gray-300">Couch Potatoes</span>
-                  </div>
-                  <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
-                    For couples who can't agree on what to watch.
-                  </p>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-[11px] text-gray-600">
-                    <span>© 2026 Couch Potatoes</span>
-                    <span className="flex gap-3">
-                      <button onClick={() => setLegalModal('terms')} className="hover:text-gray-300 transition">Terms</button>
-                      <span className="text-gray-700">·</span>
-                      <button onClick={() => setLegalModal('privacy')} className="hover:text-gray-300 transition">Privacy</button>
-                      <span className="text-gray-700">·</span>
-                      <a href="mailto:help@couchpotatoes.co" className="hover:text-gray-300 transition">Contact</a>
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-gray-700 mt-4 leading-snug">
-                    Movie and TV data from <a href="https://www.themoviedb.org" target="_blank" rel="noopener" className="underline hover:text-gray-500">TMDB</a>. Not endorsed by TMDB.
-                  </p>
-                </div>
-              </footer>
             </div></div>
           )}
 
@@ -4731,6 +4728,35 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   </div>
 
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ GLOBAL FOOTER — compact, every screen ═══ */}
+          <footer className="flex-shrink-0 w-full border-t border-gray-900 px-6 py-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
+            <div className="max-w-[800px] mx-auto">
+              <div className="flex items-center justify-between text-[10px] text-gray-600">
+                <span>© 2026 Couch Potatoes</span>
+                <span className="flex items-center gap-2.5">
+                  <button onClick={() => setLegalModal('terms')} className="hover:text-gray-400 transition">Terms</button>
+                  <span className="text-gray-800">·</span>
+                  <button onClick={() => setLegalModal('privacy')} className="hover:text-gray-400 transition">Privacy</button>
+                  <span className="text-gray-800">·</span>
+                  <button onClick={copyContactEmail} className="hover:text-gray-400 transition">Contact</button>
+                </span>
+              </div>
+              <p className="text-[9px] text-gray-700 mt-1 leading-snug">
+                Data from <a href="https://www.themoviedb.org" target="_blank" rel="noopener" className="underline hover:text-gray-500">TMDB</a>. Not endorsed by TMDB.
+              </p>
+            </div>
+          </footer>
+
+          {/* ═══ CONTACT TOAST — copied-to-clipboard confirmation ═══ */}
+          {contactToast && (
+            <div className="fixed left-1/2 -translate-x-1/2 bottom-20 md:bottom-24 z-[60] pointer-events-none">
+              <div className="bg-gray-800 border border-gray-700 text-gray-100 text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-black/50 fade-in flex items-center gap-2">
+                <span>📋</span>
+                <span><span className="text-gray-400">Copied</span> help@couchpotatoes.co</span>
               </div>
             </div>
           )}
