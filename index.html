@@ -1271,9 +1271,13 @@ Bad:
 Output ONLY the line.`;
         };
 
+        // Only generate a partner note if profile2 is actually set up (has genres).
+        // Otherwise solo users who typed a partner name during onboarding but never
+        // finished the form get phantom "why you'd like this" notes for an empty profile.
+        const hasPartner = !!(profile2.name && profile2.genres && profile2.genres.length > 0);
         Promise.all([
           profile1.name ? callClaude(anthropicKey, buildPrompt(profile1, tasteDNA1), 80).catch(e => { console.error("Claude note1 error:", e); return "__ERR__" + e.message; }) : null,
-          profile2.name ? callClaude(anthropicKey, buildPrompt(profile2, tasteDNA2), 80).catch(e => { console.error("Claude note2 error:", e); return "__ERR__" + e.message; }) : null,
+          hasPartner ? callClaude(anthropicKey, buildPrompt(profile2, tasteDNA2), 80).catch(e => { console.error("Claude note2 error:", e); return "__ERR__" + e.message; }) : null,
         ]).then(([n1, n2]) => {
           if (cancelled) return;
           const err1 = typeof n1 === "string" && n1.startsWith("__ERR__") ? n1.slice(7) : null;
@@ -1579,12 +1583,16 @@ Output ONLY the line.`;
 
               {/* Why you'd like this — compact text lines */}
               {(() => {
+                // hasPartner mirrors the LLM-call gate: solo users (or those who
+                // typed a partner name but never picked genres) shouldn't see a
+                // ghost note for an empty profile.
+                const hasPartner = !!(profile2.name && profile2.genres && profile2.genres.length > 0);
                 const templateNote1 = getWhyNote(profile1, tasteDNA1);
-                const templateNote2 = getWhyNote(profile2, tasteDNA2);
+                const templateNote2 = hasPartner ? getWhyNote(profile2, tasteDNA2) : null;
                 const hasLLM = !!anthropicKey;
                 const isLoading = hasLLM && llmNotes.loading;
                 const note1 = (hasLLM && llmNotes.note1) ? llmNotes.note1 : templateNote1;
-                const note2 = (hasLLM && llmNotes.note2) ? llmNotes.note2 : templateNote2;
+                const note2 = hasPartner ? ((hasLLM && llmNotes.note2) ? llmNotes.note2 : templateNote2) : null;
                 const showNote1 = isLoading ? templateNote1 : note1;
                 const showNote2 = isLoading ? templateNote2 : note2;
                 if (!showNote1 && !showNote2) return null;
@@ -4664,101 +4672,39 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     )}
                   </div>
 
-                  {/* AI personalization */}
+                  {/* Taste profile actions — AI is always on via the server-side proxy,
+                      so the user no longer needs to bring their own API key. */}
                   <div>
-                    <h3 className="text-lg font-bold mb-2">AI personalization</h3>
-                    <p className="text-gray-500 text-xs mb-3">Add your Anthropic API key to unlock AI-powered "why you'd like this" notes and richer taste profiles. Get a key at{" "}
-                      <a href="https://console.anthropic.com/settings/keys" target="_blank" className="text-orange-300 underline">console.anthropic.com</a>
-                    </p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={anthropicKeyInput}
-                        onChange={e => setAnthropicKeyInput(e.target.value)}
-                        placeholder={anthropicKey ? "sk-ant-•••••••• (connected)" : "sk-ant-... (optional)"}
-                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-orange-400 text-xs"
-                      />
-                      <button
-                        onClick={async () => {
-                          const k = anthropicKeyInput.trim();
-                          if (!k) return;
-                          setToastMsg("Testing API key...");
-                          const testResult = await testAnthropicKey(k);
-                          if (!testResult.ok) {
-                            setToastMsg("API key failed: " + testResult.error);
-                            setTimeout(() => setToastMsg(""), 6000);
-                            return;
+                    <h3 className="text-lg font-bold mb-2">Taste profile</h3>
+                    <p className="text-gray-500 text-xs mb-3">Re-run AI analysis on your favorites to refresh your taste profile and "why you'd like this" notes.</p>
+                    <button
+                      onClick={async () => {
+                        setToastMsg("Regenerating taste profiles with AI...");
+                        try {
+                          const [dna1, dna2] = await Promise.all([
+                            profile1.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile1, genreMap, anthropicKey) : null,
+                            profile2.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile2, genreMap, anthropicKey) : null,
+                          ]);
+                          if (dna1) setTasteDNA1(dna1);
+                          if (dna2) setTasteDNA2(dna2);
+                          const errors = [dna1?.llmError, dna2?.llmError].filter(Boolean);
+                          if (errors.length > 0) {
+                            setToastMsg("Profiles updated but AI paragraph failed: " + errors[0].slice(0, 60));
+                          } else if ((dna1?.llmUsed || !dna1) && (dna2?.llmUsed || !dna2)) {
+                            setToastMsg("AI profiles updated!");
+                          } else {
+                            setToastMsg("Profiles updated (template fallback used)");
                           }
-                          setAnthropicKey(k);
-                          setToastMsg(`Key verified (${testResult.model})! Regenerating profiles...`);
-                          try {
-                            const [dna1, dna2] = await Promise.all([
-                              profile1.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile1, genreMap, k) : null,
-                              profile2.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile2, genreMap, k) : null,
-                            ]);
-                            if (dna1) setTasteDNA1(dna1);
-                            if (dna2) setTasteDNA2(dna2);
-                            const errors = [dna1?.llmError, dna2?.llmError].filter(Boolean);
-                            if (errors.length > 0) {
-                              setToastMsg("Key saved. AI paragraph failed: " + errors[0].slice(0, 60));
-                            } else {
-                              setToastMsg("AI profiles updated!");
-                            }
-                          } catch (e) {
-                            console.error("Re-analyze error:", e);
-                            setToastMsg("Key saved but profile generation failed: " + e.message.slice(0, 60));
-                          }
-                          setTimeout(() => setToastMsg(""), 5000);
-                        }}
-                        disabled={!anthropicKeyInput.trim() || anthropicKeyInput.trim() === anthropicKey}
-                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-30 rounded-lg text-xs font-medium active:scale-95 transition-all"
-                      >
-                        Save
-                      </button>
-                    </div>
-                    {anthropicKey && (
-                      <div className="mt-2">
-                        <p className="text-green-400 text-xs flex items-center gap-1 mb-2">
-                          <span>✓</span> Key saved — AI notes active
-                        </p>
-                        <button
-                          onClick={async () => {
-                            setToastMsg("Testing connection...");
-                            const testResult = await testAnthropicKey(anthropicKey);
-                            if (!testResult.ok) {
-                              setToastMsg("API key error: " + testResult.error.slice(0, 80));
-                              setTimeout(() => setToastMsg(""), 5000);
-                              return;
-                            }
-                            setToastMsg("Regenerating taste profiles with AI...");
-                            try {
-                              const [dna1, dna2] = await Promise.all([
-                                profile1.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile1, genreMap, anthropicKey) : null,
-                                profile2.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile2, genreMap, anthropicKey) : null,
-                              ]);
-                              if (dna1) setTasteDNA1(dna1);
-                              if (dna2) setTasteDNA2(dna2);
-                              // Check if LLM was actually used
-                              const errors = [dna1?.llmError, dna2?.llmError].filter(Boolean);
-                              if (errors.length > 0) {
-                                setToastMsg("Profiles updated but AI paragraph failed: " + errors[0].slice(0, 60));
-                              } else if ((dna1?.llmUsed || !dna1) && (dna2?.llmUsed || !dna2)) {
-                                setToastMsg("AI profiles updated!");
-                              } else {
-                                setToastMsg("Profiles updated (template fallback used)");
-                              }
-                            } catch (e) {
-                              console.error("Re-analyze error:", e);
-                              setToastMsg("Error: " + e.message.slice(0, 80));
-                            }
-                            setTimeout(() => setToastMsg(""), 5000);
-                          }}
-                          className="w-full py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 hover:text-white hover:border-orange-500/30 active:scale-95 transition-all"
-                        >
-                          Regenerate taste profiles with AI
-                        </button>
-                      </div>
-                    )}
+                        } catch (e) {
+                          console.error("Re-analyze error:", e);
+                          setToastMsg("Error: " + e.message.slice(0, 80));
+                        }
+                        setTimeout(() => setToastMsg(""), 5000);
+                      }}
+                      className="w-full py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 hover:text-white hover:border-orange-500/30 active:scale-95 transition-all"
+                    >
+                      Regenerate taste profiles with AI
+                    </button>
                   </div>
                 </div>
               </div>
