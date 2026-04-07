@@ -3587,7 +3587,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
       // Compact footer rendered at the end of each screen's scroll container,
       // so it scrolls with content rather than being pinned to the viewport.
       const footerEl = (
-        <footer className="w-full border-t border-gray-900 px-6 py-3 mt-8" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
+        <footer className="w-full border-t border-gray-900 px-6 py-2" style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}>
           <div className="max-w-[800px] mx-auto">
             <div className="flex items-center justify-between text-[10px] text-gray-600">
               <span>© 2026 Couch Potatoes</span>
@@ -3599,9 +3599,9 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                 <button onClick={copyContactEmail} className="hover:text-gray-400 transition">Contact</button>
               </span>
             </div>
-            <div className="mt-1.5 flex items-center gap-2">
+            <div className="mt-1 flex items-center gap-1.5">
               <a href="https://www.themoviedb.org" target="_blank" rel="noopener" className="flex-shrink-0 inline-flex" aria-label="The Movie Database">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 273.42 35.52" height="14" role="img" aria-label="TMDB">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 273.42 35.52" height="11" role="img" aria-label="TMDB">
                   <defs>
                     <linearGradient id="tmdbBlueShortGradient" y1="17.76" x2="273.42" y2="17.76" gradientUnits="userSpaceOnUse">
                       <stop offset="0" stopColor="#90cea1" />
@@ -3668,7 +3668,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
           )}
 
           {/* ═══ WELCOME ═══ */}
-          {screen === S.WELCOME && (
+          {screen === S.WELCOME && (<>
             <div className="flex-1 overflow-y-auto w-full"><div className="flex flex-col items-center px-8 pt-6 max-w-[600px] mx-auto w-full min-h-full">
               <div className="flex-1 flex flex-col items-center justify-center w-full py-10">
                 {urlBootstrap.join ? (
@@ -3727,7 +3727,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   </>
                 )}
               </div>
-            </div>{footerEl}</div>
+            </div></div>{footerEl}</>
           )}
 
           {/* ═══ SETUP ═══ */}
