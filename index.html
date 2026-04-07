@@ -3165,19 +3165,13 @@ Output ONLY the line.`;
             setFeedbackLoading(false);
             return;
           }
-          // Use Claude to interpret the natural language request into TMDB search strategy
-          const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": anthropicKey,
-              "anthropic-version": "2023-06-01",
-              "anthropic-dangerous-direct-browser-access": "true",
-            },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 500,
-              messages: [{ role: "user", content: `A user is looking for movie/TV recommendations. They said: "${feedbackText.trim()}"
+          // Use Claude (via the Supabase edge proxy — see callClaude) to
+          // interpret the natural language request into a TMDB search strategy.
+          // Previously this called api.anthropic.com directly with the
+          // browser-side anthropicKey, which is now the literal string "proxy"
+          // since the real key lives server-side. That made every search 401
+          // and crash on `aiData.content[0]`.
+          const aiPrompt = `A user is looking for movie/TV recommendations. They said: "${feedbackText.trim()}"
 
 Based on this, suggest:
 1. Up to 5 specific movie/TV titles to search for on TMDB (the most iconic/obvious matches)
@@ -3185,11 +3179,9 @@ Based on this, suggest:
 3. Any TMDB keywords to search with
 4. If the user mentions a specific decade or time period (like "90s", "80s films", "2000s"), extract it as a date range. Use dateGte for start and dateLte for end. For example, "90s" = dateGte: "1990-01-01", dateLte: "1999-12-31". Only include these if the user explicitly mentions a time period — NOT for vague references like "classic" or "old school".
 
-Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "keywords": ["keyword1"], "dateGte": null, "dateLte": null, "rowLabel": "short 3-5 word label for this row in sentence case (only capitalize first word and proper nouns, e.g. 'Big blockbuster adventures')" }` }],
-            }),
-          });
-          const aiData = await aiRes.json();
-          const parsed = JSON.parse(aiData.content[0].text.replace(/```json\n?|```/g, "").trim());
+Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "keywords": ["keyword1"], "dateGte": null, "dateLte": null, "rowLabel": "short 3-5 word label for this row in sentence case (only capitalize first word and proper nouns, e.g. 'Big blockbuster adventures')" }`;
+          const aiText = await callClaude(anthropicKey, aiPrompt, 500);
+          const parsed = JSON.parse(aiText.replace(/```json\n?|```/g, "").trim());
 
           // Search for the specific titles + discover by genres
           const searchPromises = (parsed.titles || []).slice(0, 5).map(title =>
