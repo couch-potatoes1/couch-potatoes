@@ -1943,9 +1943,19 @@ Output ONLY the line.`;
         try { householdIdRef.current = getHouseholdId(); } catch { householdIdRef.current = "cp_demo"; }
       }
       const skipNextCloudSaveRef = useRef(false);
+      // Per-tab client id so we can ignore realtime echoes of our own writes.
+      // Without this, fast successive taps race the echo and earlier snapshots
+      // clobber later local state ("the second pill doesn't stick" bug).
+      const clientIdRef = useRef(null);
+      if (clientIdRef.current === null) {
+        clientIdRef.current = (window.crypto && window.crypto.randomUUID)
+          ? window.crypto.randomUUID()
+          : (Date.now() + "-" + Math.random().toString(36).slice(2));
+      }
 
       // Helper: serialize per-person reaction state for the cloud (Sets → arrays)
       const serializeState = () => ({
+        _clientId: clientIdRef.current,
         seen1: [...seen[0]], seen2: [...seen[1]],
         dismissed: [...dismissed],
         liked1: [...liked[0]], liked2: [...liked[1]],
@@ -1997,6 +2007,9 @@ Output ONLY the line.`;
         })();
         // Realtime: partner edits push into our local state
         const unsub = cloudSubscribeHousehold(id, (row) => {
+          // Ignore echoes of our own writes — otherwise an in-flight save can
+          // overwrite a tap that happened in between save and echo arrival.
+          if (row.state && row.state._clientId === clientIdRef.current) return;
           skipNextCloudSaveRef.current = true;
           if (row.profile1) setProfile1(p => row.profile1.name ? row.profile1 : p);
           if (row.profile2) setProfile2(p => row.profile2.name ? row.profile2 : p);
