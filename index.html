@@ -3670,7 +3670,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
           {/* ═══ WELCOME ═══ */}
           {screen === S.WELCOME && (<>
             <div className="flex-1 overflow-y-auto w-full"><div className="flex flex-col items-center px-8 pt-6 max-w-[600px] mx-auto w-full min-h-full">
-              <div className="flex-1 flex flex-col items-center justify-center w-full py-10">
+              <div className="flex-1 flex flex-col items-center justify-center w-full pt-10 pb-20">
                 {urlBootstrap.join ? (
                   // Invitation landing — partner 2 just clicked the share link.
                   // We surface the inviter's name (hydrated from the household row)
@@ -3697,7 +3697,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   </>
                 ) : (
                   <>
-                    <div className="mb-12 text-center">
+                    <div className="mb-8 text-center">
                       <div className="text-7xl mb-6">🥔</div>
                       <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3">Couch Potatoes</h1>
                       <p className="text-gray-300 text-lg leading-snug max-w-[380px] mx-auto">For couples who can't agree on what to watch. Each of you builds a taste profile — we find the movies and shows you'll both actually want to watch.</p>
