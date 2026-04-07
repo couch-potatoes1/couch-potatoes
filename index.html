@@ -1878,18 +1878,36 @@ Output ONLY the line.`;
       const [profile1, setProfile1] = useState(saved?.profile1 || { name: "", genres: [], favorites: [], dealbreakers: [], eraPrefs: [], pacePrefs: [] });
       const [profile2, setProfile2] = useState(saved?.profile2 || { name: "", genres: [], favorites: [], dealbreakers: [], eraPrefs: [], pacePrefs: [] });
       const [services, setServices] = useState(saved?.services || []);
-      // Session prefs expire after 12 hours of inactivity — "tonight's vibe" is ephemeral
-      const SESSION_PREFS_TTL = 12 * 60 * 60 * 1000;
+      // Session prefs ("tonight's vibe") clear at the next 5am local time.
+      // Rationale: a 5am rollover lines up with "a new day" for humans —
+      // late-night tunes (e.g. 11pm Tue) survive until 5am Wed, and a fresh
+      // morning visit always starts with a clean tuner.
+      //
+      // Grace period: a tuner is never younger than 1 hour when it clears.
+      // Without this, someone tuning at 4:30am would lose their picks 30
+      // minutes later when 5am hits — too aggressive. With the grace, that
+      // same 4:30am tuner survives until 5:30am.
+      const SESSION_PREFS_GRACE_MS = 60 * 60 * 1000; // 1 hour
+      const isSessionPrefsExpired = (ts) => {
+        if (!ts) return false;
+        const d = new Date();
+        d.setHours(5, 0, 0, 0);
+        if (Date.now() < d.getTime()) d.setDate(d.getDate() - 1);
+        const last5am = d.getTime();
+        // Expired only if (a) the tuner predates the most recent 5am AND
+        // (b) the tuner is at least one hour old (the grace).
+        return ts < last5am && (Date.now() - ts) >= SESSION_PREFS_GRACE_MS;
+      };
       const [sessionPrefs, setSessionPrefs] = useState(() => {
         const empty = { contentType: [], mood: [], era: [] };
         if (!saved?.sessionPrefs) return empty;
         const ts = saved?.sessionPrefsTs || 0;
-        if (ts && Date.now() - ts > SESSION_PREFS_TTL) return empty;
+        if (isSessionPrefsExpired(ts)) return empty;
         return saved.sessionPrefs;
       });
       const [sessionPrefsTs, setSessionPrefsTs] = useState(() => {
         const ts = saved?.sessionPrefsTs || 0;
-        if (ts && Date.now() - ts > SESSION_PREFS_TTL) return 0;
+        if (isSessionPrefsExpired(ts)) return 0;
         return ts;
       });
       // Stamp the timestamp whenever prefs change (only if non-empty)
@@ -2968,19 +2986,49 @@ Output ONLY the line.`;
             }
           }
 
-          // ── 5. Fallback: ensure we always have at least 4 rows ──
-          // If dedup + filtering left us short, add a "Critically acclaimed" row
-          if (cats.length < 4) {
-            let acclaimed = await discoverBoth({
-              sort_by: "vote_average.desc",
-              "vote_average.gte": 7.8,
-              "vote_count.gte": 800,
-            }, {}, 3);
-            acclaimed = filterAnime(acclaimed).filter(passesDealbreakers).filter(passesMoodFilter);
-            acclaimed.sort((a, b) => scoreForCouple(b) - scoreForCouple(a));
-            const deduped = dedup(acclaimed.slice(0, 40));
-            if (deduped.length >= 2) {
-              cats.push({ title: "Certified crowd-pleasers", icon: "", items: deduped });
+          // ── 5. Fallback: guarantee a minimum row count ──
+          // Each earlier row eats items via shared `dedup` (seenIds), so by the
+          // time we get here later rows can come up empty even with rich pools.
+          // We try a series of progressively broader fallback queries and stop
+          // as soon as we hit MIN_ROWS. The titles are chosen so a couple
+          // fallbacks in a row don't read like duplicates.
+          const MIN_ROWS = 5;
+          const fallbackStrategies = [
+            {
+              title: "Certified crowd-pleasers",
+              params: { sort_by: "vote_average.desc", "vote_average.gte": 7.8, "vote_count.gte": 800 },
+            },
+            {
+              title: "Popular right now",
+              params: { sort_by: "popularity.desc", "vote_count.gte": 200, "vote_average.gte": 6.5 },
+            },
+            {
+              title: "Highly rated picks",
+              params: { sort_by: "vote_average.desc", "vote_count.gte": 300, "vote_average.gte": 7.2 },
+            },
+            {
+              title: "Modern favorites",
+              params: { sort_by: "popularity.desc", "vote_count.gte": 100, "vote_average.gte": 6.0, "primary_release_date.gte": "2015-01-01" },
+            },
+            {
+              title: "Acclaimed older titles",
+              params: { sort_by: "vote_average.desc", "vote_count.gte": 500, "vote_average.gte": 7.5, "primary_release_date.lte": "2014-12-31" },
+            },
+          ];
+          for (const strat of fallbackStrategies) {
+            if (cats.length >= MIN_ROWS) break;
+            try {
+              let pool = await discoverBoth(strat.params, {}, 3);
+              pool = filterAnime(pool).filter(passesDealbreakers).filter(passesMoodFilter);
+              pool.sort((a, b) => scoreForCouple(b) - scoreForCouple(a));
+              const deduped = dedup(pool.slice(0, 40));
+              // Lower the per-row threshold here (>=2) since the whole point of
+              // fallbacks is to fill an otherwise-sparse page.
+              if (deduped.length >= 2) {
+                cats.push({ title: strat.title, icon: "", items: deduped });
+              }
+            } catch (e) {
+              console.warn("fallback row failed:", strat.title, e);
             }
           }
 
@@ -3020,6 +3068,11 @@ Output ONLY the line.`;
             } else if (!isWeekend && isMorning) {
               timeLabel = "Something quick before the day starts";
               timeGenres = [35, 16, 10751]; // comedy, animation, family
+            } else if (!isWeekend && isAfternoon) {
+              // Weekday afternoon (12-17, Mon-Fri) — lunch / midday slot.
+              // Easy-watch energy: comedy, animation, family, light drama.
+              timeLabel = "Midday break, midday watch";
+              timeGenres = [35, 16, 10751, 18]; // comedy, animation, family, drama
             }
 
             if (timeLabel && timeGenres.length > 0) {
@@ -3594,32 +3647,60 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
           {screen === S.WELCOME && (
             <div className="flex-1 overflow-y-auto w-full"><div className="flex flex-col items-center px-8 pt-6 max-w-[600px] mx-auto w-full min-h-full">
               <div className="flex-1 flex flex-col items-center justify-center w-full py-10">
-                <div className="mb-12 text-center">
-                  <div className="text-7xl mb-6">🥔</div>
-                  <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3">Couch Potatoes</h1>
-                  <p className="text-gray-300 text-lg leading-snug max-w-[360px] mx-auto">For couples who can't agree on what to watch.</p>
-                </div>
-                {/* Dev-mode "API keys missing" banner removed — keys are now server-side
-                    via Supabase edge function proxies. */}
-                {profile1.name && profile2.name && profile1.genres.length > 0 && profile2.genres.length > 0 ? (
-                  <div className="w-full space-y-3">
-                    <button onClick={() => goTo(S.SESSION_PREFS)}
-                      className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
-                      Welcome back, {profile1.name} & {profile2.name}
-                    </button>
-                    <button onClick={() => goTo(S.SETUP)}
-                      className="w-full py-3 bg-gray-800 border border-gray-700 rounded-2xl text-sm text-gray-300 active:scale-95">
-                      New profiles
-                    </button>
-                  </div>
+                {urlBootstrap.join ? (
+                  // Invitation landing — partner 2 just clicked the share link.
+                  // We surface the inviter's name (hydrated from the household row)
+                  // so the very first thing they see is "Alex invited you".
+                  <>
+                    <div className="mb-12 text-center">
+                      <div className="text-7xl mb-6">💌</div>
+                      <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3 leading-[1.1]">
+                        {profile1.name ? `${profile1.name} invited you` : "You've been invited"}
+                      </h1>
+                      <p className="text-gray-300 text-lg leading-snug max-w-[360px] mx-auto">
+                        {profile1.name
+                          ? `${profile1.name} already filled out their half. Take ~2 minutes to fill out yours and we'll start matching you up.`
+                          : "Take ~2 minutes to fill out your half and we'll start matching you up."}
+                      </p>
+                    </div>
+                    <div className="w-full">
+                      <button onClick={() => goTo(S.SETUP)}
+                        className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                        Start my profile
+                      </button>
+                      <p className="text-gray-600 text-xs mt-4 text-center">No more 20-minute scroll fights.</p>
+                    </div>
+                  </>
                 ) : (
-                  <div className="w-full">
-                    <button onClick={() => goTo(S.SETUP)}
-                      className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
-                      Get Started
-                    </button>
-                    <p className="text-gray-600 text-xs mt-4 text-center">Stop scrolling. Start watching.</p>
-                  </div>
+                  <>
+                    <div className="mb-12 text-center">
+                      <div className="text-7xl mb-6">🥔</div>
+                      <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3">Couch Potatoes</h1>
+                      <p className="text-gray-300 text-lg leading-snug max-w-[360px] mx-auto">For couples who can't agree on what to watch.</p>
+                    </div>
+                    {/* Dev-mode "API keys missing" banner removed — keys are now server-side
+                        via Supabase edge function proxies. */}
+                    {profile1.name && profile2.name && profile1.genres.length > 0 && profile2.genres.length > 0 ? (
+                      <div className="w-full space-y-3">
+                        <button onClick={() => goTo(S.SESSION_PREFS)}
+                          className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                          Welcome back, {profile1.name} & {profile2.name}
+                        </button>
+                        <button onClick={() => goTo(S.SETUP)}
+                          className="w-full py-3 bg-gray-800 border border-gray-700 rounded-2xl text-sm text-gray-300 active:scale-95">
+                          New profiles
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-full">
+                        <button onClick={() => goTo(S.SETUP)}
+                          className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                          Get Started
+                        </button>
+                        <p className="text-gray-600 text-xs mt-4 text-center">Stop scrolling. Start watching.</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>{footerEl}</div>
@@ -3633,9 +3714,13 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               {urlBootstrap.join ? (
                 <>
                   <div className="text-5xl mb-3">💌</div>
-                  <h2 className="text-[1.875rem] font-extrabold mb-2 tracking-tight leading-[1.15]">You've been invited</h2>
+                  <h2 className="text-[1.875rem] font-extrabold mb-2 tracking-tight leading-[1.15]">
+                    {profile1.name ? `${profile1.name} invited you` : "You've been invited"}
+                  </h2>
                   <p className="text-gray-400 text-[0.9375rem] mb-3">Couch Potatoes 🥔 picks movies and shows you'll <span className="text-gray-200 font-medium">both</span> actually want to watch — no more 20-minute scroll fights.</p>
-                  <p className="text-gray-400 text-[0.9375rem] mb-9">Your partner already filled out their half. Take ~2 minutes to fill out yours and we'll start matching you up.</p>
+                  <p className="text-gray-400 text-[0.9375rem] mb-9">
+                    {profile1.name ? `${profile1.name} already filled out their half.` : "Your partner already filled out their half."} Take ~2 minutes to fill out yours and we'll start matching you up.
+                  </p>
                   <div className="space-y-5">
                     <div>
                       <label htmlFor="partner1name" className="text-sm text-gray-400 mb-2 block">Your name</label>
