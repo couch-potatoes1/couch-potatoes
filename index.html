@@ -4154,63 +4154,108 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                 </div>
 
                 {/* ── Bottom buttons ── */}
-                <div className="mt-auto mb-8 space-y-3">
-                  {/* Switch to other partner */}
-                  {(() => {
-                    const otherUser = currentUser === 1 ? 2 : 1;
-                    const otherProfile = currentUser === 1 ? profile2 : profile1;
-                    const otherHasProfile = otherProfile.genres?.length > 0;
-                    const otherName = otherProfile.name || `Partner ${otherUser}`;
-                    return (
-                      <button onClick={() => {
-                          setCurrentUser(otherUser);
-                          if (otherHasProfile) {
-                            setAnalyzingDNA(true); setTasteDNA(null);
-                            // Stay on same screen, just swap user — no history push
-                            (async () => {
-                              try {
-                                const dna = await analyzeTasteDNA(apiKey, otherProfile, genreMap, anthropicKey);
-                                setTasteDNA(dna);
-                                if (otherUser === 1) setTasteDNA1(dna); else setTasteDNA2(dna);
-                              } catch (e) { console.error("DNA error:", e); const dnaError = { traits: [], paragraph: "Couldn't analyze — try adding more favorites.", vibe: "Mystery" }; setTasteDNA(dnaError); if (otherUser === 1) setTasteDNA1(dnaError); else setTasteDNA2(dnaError); }
-                              setAnalyzingDNA(false);
-                            })();
-                          } else {
-                            goTo(S.PROFILE_GENRES);
-                          }
-                        }}
-                        className="w-full py-3 bg-gray-800 border border-gray-700 rounded-2xl font-medium text-sm active:scale-95 text-gray-300 hover:border-orange-500/30 hover:text-white transition-all">
-                        {otherHasProfile ? `View ${otherName}'s profile` : `Set up ${otherName}'s profile`}
-                      </button>
-                    );
-                  })()}
-                  {/* Main CTA */}
-                  {currentUser === 1 && !profile2.genres.length ? (
+                {/* The button stack has two flavors:
+                    (a) "solo-eligible review" — Partner 1 has finished their
+                        profile and Partner 2 hasn't started one. This is the
+                        moment to offer three real intents: invite the partner,
+                        fill in their half yourself, or skip them and go solo.
+                        We hide "Start over" here because it's destructive on
+                        a happy-path screen and the solo CTA covers the real
+                        "I changed my mind about the partner" intent.
+                    (b) Everything else — both profiles exist, or we're
+                        reviewing Partner 2's half before P1 has started, etc.
+                        Keep the legacy switch + main CTA + Start over stack. */}
+                {currentUser === 1 && !profile2.genres.length ? (
+                  <div className="mt-auto mb-8 space-y-3">
+                    {/* Primary: invite the partner */}
                     <button onClick={() => goTo(S.PARTNER_HANDOFF)}
                       className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95">
                       Invite {profile2.name || "your partner"}
                     </button>
-                  ) : currentUser === 2 && !profile1.genres.length ? (
-                    <button onClick={() => { setCurrentUser(1); goTo(S.PROFILE_GENRES); }}
-                      className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95">
-                      Now set up {profile1.name}'s profile
+                    {/* Secondary: fill in the partner's half yourself.
+                        Only shown when a partner name exists — without one,
+                        "fill it out for them" has no "them" and would feel
+                        redundant against the solo option below. */}
+                    {profile2.name && (
+                      <button onClick={() => { setCurrentUser(2); goTo(S.PROFILE_GENRES); }}
+                        className="w-full py-4 bg-gray-800 border border-gray-700 rounded-2xl font-medium text-white active:scale-95 hover:border-orange-500/30 transition-all">
+                        I'll fill it out for them
+                      </button>
+                    )}
+                    {/* Tertiary: skip the partner entirely and proceed solo.
+                        Used to be hidden inside "Start over." Promoted here
+                        as a real, non-destructive option. When there's no
+                        partner name we render it as a full secondary button
+                        instead of a quiet text link, so the stack still has
+                        visual weight. */}
+                    {profile2.name ? (
+                      <div className="text-center pt-1">
+                        <button onClick={() => goTo(S.SESSION_PREFS)}
+                          className="text-gray-400 hover:text-white text-sm transition-colors py-2">
+                          Get recommendations just for me
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => goTo(S.SESSION_PREFS)}
+                        className="w-full py-4 bg-gray-800 border border-gray-700 rounded-2xl font-medium text-white active:scale-95 hover:border-orange-500/30 transition-all">
+                        Get recommendations just for me
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-auto mb-8 space-y-3">
+                    {/* Switch to other partner */}
+                    {(() => {
+                      const otherUser = currentUser === 1 ? 2 : 1;
+                      const otherProfile = currentUser === 1 ? profile2 : profile1;
+                      const otherHasProfile = otherProfile.genres?.length > 0;
+                      const otherName = otherProfile.name || `Partner ${otherUser}`;
+                      return (
+                        <button onClick={() => {
+                            setCurrentUser(otherUser);
+                            if (otherHasProfile) {
+                              setAnalyzingDNA(true); setTasteDNA(null);
+                              // Stay on same screen, just swap user — no history push
+                              (async () => {
+                                try {
+                                  const dna = await analyzeTasteDNA(apiKey, otherProfile, genreMap, anthropicKey);
+                                  setTasteDNA(dna);
+                                  if (otherUser === 1) setTasteDNA1(dna); else setTasteDNA2(dna);
+                                } catch (e) { console.error("DNA error:", e); const dnaError = { traits: [], paragraph: "Couldn't analyze — try adding more favorites.", vibe: "Mystery" }; setTasteDNA(dnaError); if (otherUser === 1) setTasteDNA1(dnaError); else setTasteDNA2(dnaError); }
+                                setAnalyzingDNA(false);
+                              })();
+                            } else {
+                              goTo(S.PROFILE_GENRES);
+                            }
+                          }}
+                          className="w-full py-3 bg-gray-800 border border-gray-700 rounded-2xl font-medium text-sm active:scale-95 text-gray-300 hover:border-orange-500/30 hover:text-white transition-all">
+                          {otherHasProfile ? `View ${otherName}'s profile` : `Set up ${otherName}'s profile`}
+                        </button>
+                      );
+                    })()}
+                    {/* Main CTA */}
+                    {currentUser === 2 && !profile1.genres.length ? (
+                      <button onClick={() => { setCurrentUser(1); goTo(S.PROFILE_GENRES); }}
+                        className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95">
+                        Now set up {profile1.name}'s profile
+                      </button>
+                    ) : categories.length > 0 ? (
+                      <button onClick={() => setScreen(S.RECOMMENDATIONS)}
+                        className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                        {reviewSnapshotRef.current && reviewSnapshotRef.current !== JSON.stringify(currentProfile) ? "Update" : "Done"}
+                      </button>
+                    ) : (
+                      <button onClick={() => goTo(S.SESSION_PREFS)}
+                        className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                        What's tonight's vibe?
+                      </button>
+                    )}
+                    <button onClick={() => { setShowProfileSheet(false); setShowResetConfirm(true); }}
+                      className="w-full py-2.5 text-gray-600 hover:text-gray-400 text-xs transition-colors">
+                      Start over
                     </button>
-                  ) : categories.length > 0 ? (
-                    <button onClick={() => setScreen(S.RECOMMENDATIONS)}
-                      className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
-                      {reviewSnapshotRef.current && reviewSnapshotRef.current !== JSON.stringify(currentProfile) ? "Update" : "Done"}
-                    </button>
-                  ) : (
-                    <button onClick={() => goTo(S.SESSION_PREFS)}
-                      className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
-                      What's tonight's vibe?
-                    </button>
-                  )}
-                  <button onClick={() => { setShowProfileSheet(false); setShowResetConfirm(true); }}
-                    className="w-full py-2.5 text-gray-600 hover:text-gray-400 text-xs transition-colors">
-                    Start over
-                  </button>
-                </div>
+                  </div>
+                )}
                </div>{footerEl}</div>
             );
           })()}
