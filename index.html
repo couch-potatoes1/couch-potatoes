@@ -3888,10 +3888,10 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                 style={{ background: "linear-gradient(to top, rgb(17,24,39) 70%, rgba(17,24,39,0.85) 88%, rgba(17,24,39,0))" }}>
                 {!editingFromReview && (
                   <div className="mb-3 rounded-xl px-4 py-3"
-                    style={{ background: "linear-gradient(135deg, rgba(120,40,20,0.35) 0%, rgba(120,20,40,0.25) 100%)", border: "1px solid rgba(251,146,60,0.22)", backdropFilter: "blur(8px)" }}>
+                    style={{ background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(8px)" }}>
                     <div className="flex items-center gap-2 mb-1.5">
                       <span className="text-[13px]">🧬</span>
-                      <span className="font-bold text-[11px] uppercase tracking-wider text-orange-300">Early read</span>
+                      <span className="font-bold text-[11px] uppercase tracking-wider text-gray-300">Early read</span>
                       <span className="ml-auto text-[10px] text-gray-500">{genreCount} picked</span>
                     </div>
                     {earlyVibe ? (
@@ -3904,11 +3904,11 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     )}
                     <div className="h-[3px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
                       <div className="h-full rounded-full transition-all duration-300"
-                        style={{ width: `${strength}%`, background: "linear-gradient(90deg, rgb(251,146,60), rgb(244,63,94))" }} />
+                        style={{ width: `${strength}%`, background: "rgba(255,255,255,0.65)" }} />
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-[10px] text-gray-500">Profile strength</span>
-                      <span className="text-[10px] text-orange-400 font-semibold">{strength}% — favorites fill in the rest</span>
+                      <span className="text-[10px] text-gray-300 font-semibold">{strength}% — favorites fill in the rest</span>
                     </div>
                   </div>
                 )}
