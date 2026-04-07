@@ -4686,40 +4686,6 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     )}
                   </div>
 
-                  {/* Taste profile actions — AI is always on via the server-side proxy,
-                      so the user no longer needs to bring their own API key. */}
-                  <div>
-                    <h3 className="text-lg font-bold mb-2">Taste profile</h3>
-                    <p className="text-gray-500 text-xs mb-3">Re-run AI analysis on your favorites to refresh your taste profile and "why you'd like this" notes.</p>
-                    <button
-                      onClick={async () => {
-                        setToastMsg("Regenerating taste profiles with AI...");
-                        try {
-                          const [dna1, dna2] = await Promise.all([
-                            profile1.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile1, genreMap, anthropicKey) : null,
-                            profile2.favorites?.length > 0 ? analyzeTasteDNA(apiKey, profile2, genreMap, anthropicKey) : null,
-                          ]);
-                          if (dna1) setTasteDNA1(dna1);
-                          if (dna2) setTasteDNA2(dna2);
-                          const errors = [dna1?.llmError, dna2?.llmError].filter(Boolean);
-                          if (errors.length > 0) {
-                            setToastMsg("Profiles updated but AI paragraph failed: " + errors[0].slice(0, 60));
-                          } else if ((dna1?.llmUsed || !dna1) && (dna2?.llmUsed || !dna2)) {
-                            setToastMsg("AI profiles updated!");
-                          } else {
-                            setToastMsg("Profiles updated (template fallback used)");
-                          }
-                        } catch (e) {
-                          console.error("Re-analyze error:", e);
-                          setToastMsg("Error: " + e.message.slice(0, 80));
-                        }
-                        setTimeout(() => setToastMsg(""), 5000);
-                      }}
-                      className="w-full py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 hover:text-white hover:border-orange-500/30 active:scale-95 transition-all"
-                    >
-                      Regenerate taste profiles with AI
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
