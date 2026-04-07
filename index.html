@@ -3636,7 +3636,8 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                 <>
                   <div className="text-5xl mb-3">💌</div>
                   <h2 className="text-[1.875rem] font-extrabold mb-2 tracking-tight leading-[1.15]">You've been invited</h2>
-                  <p className="text-gray-400 text-[0.9375rem] mb-9">Your partner started a profile and wants you to fill out your side. It takes about 2 minutes.</p>
+                  <p className="text-gray-400 text-[0.9375rem] mb-3">Couch Potatoes 🥔 picks movies and shows you'll <span className="text-gray-200 font-medium">both</span> actually want to watch — no more 20-minute scroll fights.</p>
+                  <p className="text-gray-400 text-[0.9375rem] mb-9">Your partner already filled out their half. Take ~2 minutes to fill out yours and we'll start matching you up.</p>
                   <div className="space-y-5">
                     <div>
                       <label htmlFor="partner1name" className="text-sm text-gray-400 mb-2 block">Your name</label>
@@ -4261,7 +4262,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
             // do NOT include shareUrl inside `shareText` — navigator.share()
             // appends `url` on its own, and if the URL is also baked into the
             // text most share sheets render it twice (link → text → link).
-            const shareText = `i started a Couch Potatoes profile for us 🥔 it's an app that picks movies + shows we'll BOTH actually want to watch — no more 20-minute scroll fights. take 2 min to fill out your half:`;
+            const shareText = `I started a Couch Potatoes profile for us 🥔 it's an app that picks movies + shows we'll BOTH actually want to watch — no more 20-minute scroll fights. Take 2 min to fill out your half:`;
             const copyLink = async () => {
               // Clipboard gets the full message + url so pasting into iMessage
               // / WhatsApp / etc. lands a self-explanatory invite, not a bare link.
@@ -4546,7 +4547,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                           <div className="flex gap-2">
                             <input type="text" value={feedbackText} onChange={e => setFeedbackText(e.target.value)}
                               onKeyDown={e => e.key === "Enter" && handleFeedbackSearch()}
-                              placeholder="Describe what you're in the mood for..."
+                              placeholder="In the mood for…"
                               className="flex-1 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none transition-colors"
                               style={{ background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.1)" }}
                               onFocus={e => e.target.style.borderColor = "rgba(244,63,94,0.35)"}
