@@ -5288,15 +5288,22 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                         // a share panel the user often dismisses, so we fall
                         // back to straight clipboard copy there (which is what
                         // most desktop users actually expect).
-                        const isMobile = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || "");
-                        if (isMobile && navigator.share) {
+                        // Prefer the native share sheet everywhere it
+                        // exists — on desktop Chrome/Safari Mac this opens
+                        // the system share panel (AirDrop / Messages /
+                        // contacts), which is what users actually want.
+                        // Fall back to clipboard when navigator.share is
+                        // unavailable OR when it throws for any reason
+                        // other than the user explicitly cancelling.
+                        if (navigator.share) {
                           try {
                             await navigator.share({ title: "Couch Potatoes", text, url: shareUrl });
                             setAccountModal(false);
                             return;
                           } catch (e) {
                             if (e && e.name === "AbortError") return; // user cancelled, keep modal open
-                            // otherwise fall through to clipboard fallback
+                            // NotAllowedError, permission issues, etc.
+                            // → fall through to clipboard
                           }
                         }
                         try {
