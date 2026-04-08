@@ -75,3 +75,60 @@ create policy "public update households"
 -- Partner 2 sees it instantly).
 -- ============================================================================
 alter publication supabase_realtime add table households;
+
+-- ============================================================================
+-- USER_CONSENTS TABLE
+-- Records each signed-in user's acceptance of the Terms of Service + Privacy
+-- Policy, and their optional marketing opt-in choice. One row per user.
+--
+-- Design notes:
+--  * `terms_version` stamps WHICH version the user agreed to. If we update
+--    the legal copy, new sign-ups get the new version, but existing users
+--    are NOT re-prompted — we treat prior consent as durable per our UX
+--    guidance. If we ever need a forced re-accept path, we'd add a separate
+--    mechanism (e.g. a `requires_reaccept` table) rather than overload this.
+--  * `marketing_opted_in_at` is stored separately so we have provable timing
+--    for CAN-SPAM / GDPR if the user ever disputes it.
+--  * `on delete cascade` — if a user deletes their auth account, their
+--    consent row goes with them automatically.
+-- ============================================================================
+create table if not exists user_consents (
+  user_id               uuid primary key references auth.users(id) on delete cascade,
+  terms_accepted_at     timestamptz not null,
+  terms_version         text        not null default 'v1-2026-04',
+  marketing_opted_in    boolean     not null default false,
+  marketing_opted_in_at timestamptz,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+
+-- Auto-touch updated_at on any row update (reuses the function from above)
+drop trigger if exists user_consents_touch_updated_at on user_consents;
+create trigger user_consents_touch_updated_at
+  before update on user_consents
+  for each row
+  execute function touch_updated_at();
+
+-- ----------------------------------------------------------------------------
+-- RLS for user_consents
+-- Each user can only read and write their OWN consent row. There is no
+-- public read — consent records are private to the account that owns them.
+-- ----------------------------------------------------------------------------
+alter table user_consents enable row level security;
+
+drop policy if exists "user reads own consent"  on user_consents;
+drop policy if exists "user inserts own consent" on user_consents;
+drop policy if exists "user updates own consent" on user_consents;
+
+create policy "user reads own consent"
+  on user_consents for select
+  using (auth.uid() = user_id);
+
+create policy "user inserts own consent"
+  on user_consents for insert
+  with check (auth.uid() = user_id);
+
+create policy "user updates own consent"
+  on user_consents for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

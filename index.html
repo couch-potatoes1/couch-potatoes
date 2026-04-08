@@ -2044,6 +2044,110 @@ Output ONLY the line.`;
           console.error("[Couch Potatoes] sign-out failed", e);
         }
       };
+
+      // ─── Consent collection ───
+      // After any successful sign-in we check for a row in `user_consents`
+      // for the current user. Missing row → show the consent modal so the
+      // user can accept Terms + choose their marketing preference before we
+      // let them into the rest of the app's auth-gated surface.
+      //
+      // Two states for the same modal:
+      //   'needed-A'  → brand-new account (first sign-in). Header: "Almost there".
+      //   'needed-B'  → existing account missing a consent row (rare recovery
+      //                 path — data wipe, pre-rollout signup, etc). Header:
+      //                 "Quick housekeeping" with a yellow banner.
+      //
+      // Detection heuristic: 30-minute window since auth.users.created_at.
+      // Inside the window we assume State A; outside, State B.
+      const [consentStatus, setConsentStatus] = useState('unknown'); // 'unknown' | 'needed-A' | 'needed-B' | 'ok' | 'error'
+      const [consentChecking, setConsentChecking] = useState(false);
+      const [consentTerms, setConsentTerms] = useState(false);
+      const [consentMarketing, setConsentMarketing] = useState(false);
+      const [consentSubmitting, setConsentSubmitting] = useState(false);
+
+      useEffect(() => {
+        if (!authUser) {
+          setConsentStatus('unknown');
+          setConsentTerms(false);
+          setConsentMarketing(false);
+          return;
+        }
+        const sb = window.cpSupabase;
+        if (!sb) return;
+        let cancelled = false;
+        setConsentChecking(true);
+        (async () => {
+          try {
+            const { data, error } = await sb
+              .from('user_consents')
+              .select('user_id')
+              .eq('user_id', authUser.id)
+              .maybeSingle();
+            if (cancelled) return;
+            if (error) {
+              console.error('[Couch Potatoes] consent check failed', error);
+              setConsentStatus('error');
+              return;
+            }
+            if (data) {
+              setConsentStatus('ok');
+              return;
+            }
+            // No consent row — figure out State A vs State B by account age.
+            const createdAt = authUser.created_at ? new Date(authUser.created_at) : null;
+            const ageMinutes = createdAt ? (Date.now() - createdAt.getTime()) / 60000 : Infinity;
+            setConsentStatus(ageMinutes <= 30 ? 'needed-A' : 'needed-B');
+          } catch (e) {
+            if (cancelled) return;
+            console.error('[Couch Potatoes] consent check error', e);
+            setConsentStatus('error');
+          } finally {
+            if (!cancelled) setConsentChecking(false);
+          }
+        })();
+        return () => { cancelled = true; };
+      }, [authUser]);
+
+      const submitConsent = async () => {
+        if (!consentTerms || !authUser) return;
+        const sb = window.cpSupabase;
+        if (!sb) { setToastMsg("Couldn't save — try again"); return; }
+        setConsentSubmitting(true);
+        try {
+          const nowIso = new Date().toISOString();
+          const { error } = await sb
+            .from('user_consents')
+            .insert({
+              user_id: authUser.id,
+              terms_accepted_at: nowIso,
+              marketing_opted_in: consentMarketing,
+              marketing_opted_in_at: consentMarketing ? nowIso : null,
+            });
+          if (error) {
+            console.error('[Couch Potatoes] consent insert failed', error);
+            setToastMsg("Couldn't save — try again");
+            return;
+          }
+          setConsentStatus('ok');
+          setConsentTerms(false);
+          setConsentMarketing(false);
+        } catch (e) {
+          console.error('[Couch Potatoes] consent insert error', e);
+          setToastMsg("Couldn't save — try again");
+        } finally {
+          setConsentSubmitting(false);
+        }
+      };
+
+      // Dismiss (X) → sign the user out so they're never left in a
+      // signed-in-but-no-consent half-state. Next time they sign in, we'll
+      // ask again.
+      const dismissConsent = async () => {
+        try { await signOut(); } catch {}
+        setConsentStatus('unknown');
+        setConsentTerms(false);
+        setConsentMarketing(false);
+      };
       const [tasteDNA, setTasteDNA] = useState(null);
       const [tasteDNA1, setTasteDNA1] = useState(saved?.tasteDNA1 || null);
       const [tasteDNA2, setTasteDNA2] = useState(saved?.tasteDNA2 || null);
@@ -5098,7 +5202,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
 
           {/* ═══ LEGAL MODAL (Terms / Privacy) ═══ */}
           {legalModal && (
-            <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+            <div className="fixed inset-0 z-[80] flex items-end md:items-center justify-center">
               <div className="absolute inset-0 bg-black/80 backdrop-blur-sm fade-in" onClick={() => setLegalModal(null)} />
               <div className="relative w-full md:w-[640px] bg-gray-900 border border-gray-700 md:rounded-2xl rounded-t-3xl max-h-[88vh] md:max-h-[85vh] flex flex-col slide-up md:fade-in">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900 md:rounded-t-2xl rounded-t-3xl">
@@ -5365,6 +5469,134 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </button>
                     <p className="text-xs text-gray-500 mt-2 text-center">They'll fill out their half on their own device.</p>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ CONSENT MODAL ═══
+              Shown after a successful sign-in when the user has no row in
+              user_consents. Two visual states:
+                State A ('needed-A'): first sign-in — friendly intro copy.
+                State B ('needed-B'): missing row recovery — yellow banner.
+              Dismissing (X) signs the user back out so they're never left
+              in a signed-in-but-no-consent half-state. z-[70] puts this
+              above the Account modal (z-50) and the toast (z-[60]). */}
+          {(consentStatus === 'needed-A' || consentStatus === 'needed-B') && authUser && (
+            <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-md fade-in" />
+              <div className="relative w-full md:w-[480px] bg-gray-900 border border-gray-700 md:rounded-2xl rounded-t-3xl max-h-[92vh] md:max-h-[86vh] flex flex-col slide-up md:fade-in">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900 md:rounded-t-2xl rounded-t-3xl">
+                  <h2 className="text-lg font-semibold text-gray-100">
+                    {consentStatus === 'needed-A' ? 'Almost there' : 'Quick housekeeping'}
+                  </h2>
+                  <button onClick={dismissConsent} className="text-gray-500 hover:text-white p-2 -mr-2 active:scale-95" aria-label="Cancel sign-in">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <div className="overflow-y-auto px-6 py-5">
+                  {/* Signed-in identity strip */}
+                  <div className="flex items-center gap-3 p-3 mb-4 bg-white/[0.025] border border-white/[0.06] rounded-xl">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-400 to-orange-500 text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
+                      {(authUser.email || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="text-[13px] text-gray-100 min-w-0">
+                      Signed in with Google
+                      <div className="text-[11px] text-gray-500 truncate">{authUser.email}</div>
+                    </div>
+                  </div>
+
+                  {/* State A intro copy */}
+                  {consentStatus === 'needed-A' && (
+                    <p className="text-gray-300 text-[14px] leading-relaxed mb-5">
+                      Before we save your account, two quick things.
+                    </p>
+                  )}
+
+                  {/* State B recovery banner */}
+                  {consentStatus === 'needed-B' && (
+                    <div className="flex gap-2.5 items-start p-3 mb-5 bg-amber-500/[0.06] border border-amber-500/20 rounded-xl">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" className="flex-shrink-0 mt-0.5">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                      <div className="text-[12.5px] text-amber-200 leading-snug">
+                        We couldn't find your saved consent on record. Please confirm to continue.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Required: Terms + Privacy */}
+                  <label
+                    htmlFor="consent-terms"
+                    className={`flex gap-3 items-start p-3.5 mb-2.5 rounded-xl cursor-pointer border ${consentTerms ? 'border-rose-400/40 bg-rose-500/[0.05]' : 'border-rose-400/20 bg-rose-500/[0.04]'}`}
+                  >
+                    <div className="relative mt-0.5 flex-shrink-0">
+                      <input
+                        id="consent-terms"
+                        type="checkbox"
+                        checked={consentTerms}
+                        onChange={e => setConsentTerms(e.target.checked)}
+                        className="sr-only"
+                      />
+                      <div className={`w-[18px] h-[18px] rounded border ${consentTerms ? 'bg-gradient-to-br from-rose-400 to-orange-500 border-transparent' : 'border-gray-600 bg-transparent'} flex items-center justify-center`}>
+                        {consentTerms && (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-[13.5px] text-gray-100 leading-[1.5]">
+                      I agree to the{' '}
+                      <button type="button" onClick={e => { e.preventDefault(); e.stopPropagation(); setLegalModal('terms'); }} className="text-orange-300 underline hover:text-orange-200">Terms of Service</button>
+                      {' '}and{' '}
+                      <button type="button" onClick={e => { e.preventDefault(); e.stopPropagation(); setLegalModal('privacy'); }} className="text-orange-300 underline hover:text-orange-200">Privacy Policy</button>
+                      <span className="text-rose-400 text-[11px] font-semibold uppercase tracking-wider ml-1.5">Required</span>
+                    </div>
+                  </label>
+
+                  {/* Optional: Marketing */}
+                  <label
+                    htmlFor="consent-marketing"
+                    className="flex gap-3 items-start p-3.5 mb-4 rounded-xl cursor-pointer bg-white/[0.02] border border-white/[0.06]"
+                  >
+                    <div className="relative mt-0.5 flex-shrink-0">
+                      <input
+                        id="consent-marketing"
+                        type="checkbox"
+                        checked={consentMarketing}
+                        onChange={e => setConsentMarketing(e.target.checked)}
+                        className="sr-only"
+                      />
+                      <div className={`w-[18px] h-[18px] rounded border ${consentMarketing ? 'bg-gradient-to-br from-rose-400 to-orange-500 border-transparent' : 'border-gray-600 bg-transparent'} flex items-center justify-center`}>
+                        {consentMarketing && (
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[13.5px] text-gray-100 leading-[1.5]">
+                        Send me occasional product updates
+                        <span className="text-gray-500 text-[11px] font-medium uppercase tracking-wider ml-1.5">Optional</span>
+                      </div>
+                      <div className="text-[12px] text-gray-400 leading-snug mt-1">
+                        A few emails a year, max. No marketing partners, no third parties. Unsubscribe any time.
+                      </div>
+                    </div>
+                  </label>
+
+                  <button
+                    onClick={submitConsent}
+                    disabled={!consentTerms || consentSubmitting}
+                    className={`w-full py-3.5 rounded-xl font-semibold text-[15px] transition ${consentTerms && !consentSubmitting ? 'bg-gradient-to-r from-rose-400 to-orange-500 text-white shadow-lg shadow-rose-900/40 active:scale-[0.99]' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
+                  >
+                    {consentSubmitting ? 'Saving…' : 'Continue'}
+                  </button>
+                  <p className="text-center text-gray-500 text-[12px] mt-3.5">
+                    You can sign out from the Account menu at any time.
+                  </p>
                 </div>
               </div>
             </div>
