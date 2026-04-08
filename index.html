@@ -3166,31 +3166,60 @@ Output ONLY the line.`;
                 // Blend in user taste: find overlap between time genres and user's preferred genres
                 // This ensures results feel connected to their profile, not random
                 const userGenres = [...new Set([...allGenres])]; // combined genre picks from both profiles
+                const userGenresCompatible = userGenres.filter(g => !dealbreakGenres.has(g) && !moodHardExcludes.has(g));
                 const tasteOverlap = filteredTimeGenres.filter(g => userGenres.includes(g));
-                // Also add user genres that are compatible with the time slot
-                // (e.g., if they love sci-fi and it's a weekend afternoon, sci-fi fits)
-                const compatibleUserGenres = userGenres.filter(g =>
-                  !dealbreakGenres.has(g) && !moodHardExcludes.has(g) && filteredTimeGenres.some(tg => {
-                    // Genres that pair well with the time-slot genres
-                    const lightGenres = new Set([16, 35, 10751, 10749, 12, 14]);
-                    const heavyGenres = new Set([27, 53, 80, 10752]);
-                    const isTimeLight = filteredTimeGenres.some(fg => lightGenres.has(fg));
-                    // Don't mix heavy user genres into a light time slot
-                    if (isTimeLight && heavyGenres.has(g)) return false;
-                    return true;
-                  })
-                );
 
-                // Build final genre query: time genres + compatible taste genres (OR logic via |)
-                const queryGenres = [...new Set([...filteredTimeGenres, ...compatibleUserGenres.slice(0, 3)])];
-                const timeGenreStr = queryGenres.map(toTmdbGenre).filter(Boolean).join("|");
+                // Priority order: if the user's taste actually overlaps this
+                // time slot, use the overlap (plus compatible extras). If NOT
+                // (e.g. a documentary-only profile being asked about a
+                // Tuesday-night comedy/drama slot), prefer the user's taste
+                // over the time-slot defaults — otherwise we end up serving
+                // popular comedies that have nothing to do with what they
+                // picked.
+                let queryGenres;
+                if (tasteOverlap.length > 0) {
+                  // Sweet spot: their taste includes this time-slot vibe
+                  const lightGenres = new Set([16, 35, 10751, 10749, 12, 14]);
+                  const heavyGenres = new Set([27, 53, 80, 10752]);
+                  const isTimeLight = filteredTimeGenres.some(fg => lightGenres.has(fg));
+                  const compatibleExtras = userGenresCompatible.filter(g => !(isTimeLight && heavyGenres.has(g)));
+                  queryGenres = [...new Set([...tasteOverlap, ...compatibleExtras.slice(0, 3)])];
+                } else if (userGenresCompatible.length > 0) {
+                  // Niche taste with no overlap — lean on what they picked.
+                  // Time-slot vibe now just informs sorting, not filtering.
+                  queryGenres = userGenresCompatible;
+                } else {
+                  queryGenres = filteredTimeGenres;
+                }
 
-                let timeResults = await discoverBoth({
+                const queryTmdbGenres = queryGenres.map(toTmdbGenre).filter(Boolean);
+                const timeGenreStr = queryTmdbGenres.join("|");
+
+                // Animation (16) and Family (10751) dominate TMDB popularity
+                // rankings with Mario/Zootopia/Inside Out-style titles. Unless
+                // the user explicitly picked those, exclude them so a pure
+                // documentary (or crime, or horror) profile doesn't get a row
+                // full of kids' movies. Also exclude any dealbreaker genres.
+                const userPickedAnimation = userGenres.includes(16) || userGenres.includes(99916);
+                const userPickedFamily = userGenres.includes(10751);
+                const autoExcludeGenres = new Set();
+                if (!userPickedAnimation && !queryTmdbGenres.includes(16)) autoExcludeGenres.add(16);
+                if (!userPickedFamily && !queryTmdbGenres.includes(10751)) autoExcludeGenres.add(10751);
+                dealbreakGenres.forEach(g => autoExcludeGenres.add(g));
+                moodHardExcludes.forEach(g => autoExcludeGenres.add(g));
+                // Don't exclude a genre we're actively querying for
+                queryTmdbGenres.forEach(g => autoExcludeGenres.delete(g));
+                const withoutGenresStr = [...autoExcludeGenres].join(",");
+
+                const discoverParams = {
                   with_genres: timeGenreStr,
                   sort_by: "popularity.desc",
                   "vote_count.gte": 50,
                   "vote_average.gte": 6.0,
-                });
+                };
+                if (withoutGenresStr) discoverParams.without_genres = withoutGenresStr;
+
+                let timeResults = await discoverBoth(discoverParams);
                 timeResults = filterAnime(timeResults).filter(passesDealbreakers).filter(passesMoodFilter);
                 // Score through the couple algorithm so results reflect their taste
                 timeResults.sort((a, b) => {
