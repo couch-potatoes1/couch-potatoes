@@ -1966,6 +1966,54 @@ Output ONLY the line.`;
       // completed onboarding AND opened the recs screen ≥ N times. On dismiss,
       // set localStorage.cp_saveAcrossDismissed = timestamp so we don't nag.
       const [showSaveAcrossDevices, setShowSaveAcrossDevices] = useState(false);
+
+      // ─── Auth state (Supabase) ───
+      // authUser is null when signed out, or { id, email, ... } when signed in.
+      // authLoading is true on first mount until we've checked the existing session.
+      const [authUser, setAuthUser] = useState(null);
+      const [authLoading, setAuthLoading] = useState(true);
+      const [accountModal, setAccountModal] = useState(false);
+      useEffect(() => {
+        const sb = window.cpSupabase;
+        if (!sb) { setAuthLoading(false); return; }
+        let mounted = true;
+        sb.auth.getSession().then(({ data }) => {
+          if (!mounted) return;
+          setAuthUser(data?.session?.user || null);
+          setAuthLoading(false);
+        }).catch(() => { if (mounted) setAuthLoading(false); });
+        const { data: sub } = sb.auth.onAuthStateChange((_event, session) => {
+          setAuthUser(session?.user || null);
+        });
+        return () => {
+          mounted = false;
+          try { sub?.subscription?.unsubscribe?.(); } catch {}
+        };
+      }, []);
+      const signInWithGoogle = async () => {
+        const sb = window.cpSupabase;
+        if (!sb) { setToastMsg("Auth not configured"); return; }
+        try {
+          await sb.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin + window.location.pathname },
+          });
+        } catch (e) {
+          console.error("[Couch Potatoes] Google sign-in failed", e);
+          setToastMsg("Sign-in failed — try again");
+        }
+      };
+      const signOut = async () => {
+        const sb = window.cpSupabase;
+        if (!sb) return;
+        try {
+          await sb.auth.signOut();
+          setAccountModal(false);
+          setToastMsg("Signed out");
+        } catch (e) {
+          console.error("[Couch Potatoes] sign-out failed", e);
+        }
+      };
       const [tasteDNA, setTasteDNA] = useState(null);
       const [tasteDNA1, setTasteDNA1] = useState(saved?.tasteDNA1 || null);
       const [tasteDNA2, setTasteDNA2] = useState(saved?.tasteDNA2 || null);
@@ -3540,12 +3588,14 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
           // straight into their own onboarding — skip services (P1 already picked).
           setProfile2(p => ({ ...p, name: inputName1.trim() }));
           setCurrentUser(2);
+          try { localStorage.setItem("cp_mySlot", "2"); } catch {}
           goTo(S.PROFILE_GENRES);
           return;
         }
         setProfile1(p => ({ ...p, name: inputName1.trim() }));
         // Partner 2 is optional — they can be named now or filled in via the handoff link later
         setProfile2(p => ({ ...p, name: inputName2.trim() }));
+        try { localStorage.setItem("cp_mySlot", "1"); } catch {}
         goTo(S.SERVICES);
       };
 
@@ -3572,6 +3622,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
 
       const resetAll = () => {
         localStorage.removeItem(STORAGE_KEY);
+        try { localStorage.removeItem("cp_mySlot"); } catch {}
         setProfile1({ name: "", genres: [], favorites: [], dealbreakers: [], eraPrefs: [], pacePrefs: [] });
         setProfile2({ name: "", genres: [], favorites: [], dealbreakers: [], eraPrefs: [], pacePrefs: [] });
         setInputName1(""); setInputName2("");
@@ -4542,8 +4593,19 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               {/* ── Desktop nav (V3-B: centered brand, warm gradient) ── */}
               <div className="hidden md:block" style={{ background: "linear-gradient(180deg, rgba(40,20,25,0.6) 0%, rgba(30,15,20,0.2) 70%, transparent 100%)" }}>
                 <div className="grid items-center px-12 lg:px-16 py-3" style={{ maxWidth: 1280, margin: "0 auto", gridTemplateColumns: "1fr auto 1fr" }}>
-                  {/* Left: names as profile trigger + watchlist */}
+                  {/* Left: account avatar + names as profile trigger + watchlist */}
                   <div className="flex items-center gap-3 min-w-0 justify-self-start">
+                    <button onClick={() => setAccountModal(true)}
+                      aria-label="Account"
+                      title={authUser ? `Signed in as ${authUser.email}` : "Sign in"}
+                      className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
+                      style={authUser
+                        ? { background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }
+                        : { background: "rgba(255,255,255,0.06)", color: "rgb(156,163,175)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      {authUser
+                        ? (authUser.email?.[0] || "?").toUpperCase()
+                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>}
+                    </button>
                     <button onClick={() => { setShowProfileSheet(true); try { window.history.pushState({ overlay: "profile" }, ""); } catch {} }}
                       className="text-sm text-gray-400 hover:text-white transition-colors active:scale-95 whitespace-nowrap">
                       {isSolo ? profile1.name : `${profile1.name} + ${profile2.name}`}
@@ -4582,6 +4644,16 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               {/* ── Mobile title row ── */}
               <div className="md:hidden px-5 pt-4 pb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  <button onClick={() => setAccountModal(true)}
+                    aria-label="Account"
+                    className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
+                    style={authUser
+                      ? { background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }
+                      : { background: "rgba(255,255,255,0.06)", color: "rgb(156,163,175)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    {authUser
+                      ? (authUser.email?.[0] || "?").toUpperCase()
+                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>}
+                  </button>
                   <span className="text-base">🥔</span>
                   <span className="font-extrabold text-lg tracking-tight text-white/90">COUCH POTATOES</span>
                 </div>
@@ -4975,7 +5047,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </React.Fragment>
                   ) : legalModal === 'terms' ? (
                     <React.Fragment>
-                      <p className="text-xs text-gray-500"><strong>Last updated:</strong> April 6, 2026</p>
+                      <p className="text-xs text-gray-500"><strong>Last updated:</strong> April 7, 2026</p>
                       <p>Welcome to Couch Potatoes. These terms describe what Couch Potatoes is, what you can expect from us, and what we expect from you. We've kept them short and in plain English on purpose.</p>
 
                       <h3 className="text-base font-semibold text-gray-200 pt-2">1. What Couch Potatoes is</h3>
@@ -5002,7 +5074,17 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                       </ul>
                       <p>If you do any of these, we may block your access without notice.</p>
 
-                      <h3 className="text-base font-semibold text-gray-200 pt-2">5. Movie and TV data</h3>
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">5. Accounts (optional)</h3>
+                      <p>You can use Couch Potatoes without an account — your data lives in your browser and in your household record. If you want to sync across devices or pair with a partner more easily, you can sign in with Google. Signing in is optional. When you sign in:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>We rely on Google to verify your identity. We never see or store your Google password.</li>
+                        <li>We store your account email and a unique user ID so we can re-link you to your household on future visits.</li>
+                        <li>We record whether you accepted these terms and whether you opted in to occasional product update emails.</li>
+                        <li>You can sign out at any time, and you can ask us to delete your account by emailing <a href="mailto:help@couchpotatoes.co" className="text-orange-300 underline">help@couchpotatoes.co</a>.</li>
+                      </ul>
+                      <p>Your partner only ever sees the display name you choose during onboarding — never your email address.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">6. Movie and TV data</h3>
                       <p>Movie and TV titles, posters, descriptions, and metadata come from <strong>The Movie Database (TMDB)</strong>. Couch Potatoes uses the TMDB API but is not endorsed or certified by TMDB. All movie and TV data is © its respective owners.</p>
 
                       <h3 className="text-base font-semibold text-gray-200 pt-2">6. Changes</h3>
@@ -5013,20 +5095,30 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </React.Fragment>
                   ) : (
                     <React.Fragment>
-                      <p className="text-xs text-gray-500"><strong>Last updated:</strong> April 6, 2026</p>
+                      <p className="text-xs text-gray-500"><strong>Last updated:</strong> April 7, 2026</p>
                       <p>This is the short, plain-English version of how Couch Potatoes handles your data. The TL;DR is: we collect the minimum we need to make the app work, we don't sell anything to anyone, we don't run analytics or tracking pixels, and you can delete your data by emailing us.</p>
 
                       <h3 className="text-base font-semibold text-gray-200 pt-2">What we collect</h3>
                       <p>When you use Couch Potatoes, we store:</p>
                       <ul className="list-disc pl-5 space-y-1">
                         <li><strong>A household ID</strong> — a random string that identifies your household so you and your partner can sync.</li>
-                        <li><strong>First names</strong> — the names you and your partner enter during onboarding (e.g. "Alex" and "Chris"). These are only shown inside your own household.</li>
+                        <li><strong>First names</strong> — the names you and your partner enter during onboarding (e.g. "Alex" and "Chris"). These are only shown inside your own household. Your partner only ever sees the display name you chose, never your email.</li>
                         <li><strong>Favorites</strong> — the movies and TV shows you mark as favorites to help us learn your taste.</li>
                         <li><strong>Watch state</strong> — which movies and shows you've seen, liked, dismissed, or saved for later.</li>
                         <li><strong>Session preferences</strong> — your "tonight's vibe" picks (mood, runtime, etc.).</li>
                         <li><strong>Generated taste profile</strong> — a short summary of your viewing preferences derived from your favorites.</li>
                       </ul>
-                      <p>That's it. We do <strong>not</strong> collect your email, phone number, address, payment info, IP address (beyond standard server logs), or any other personally identifying information.</p>
+                      <p><strong>If you choose to sign in</strong> (signing in is optional — see "Accounts" below), we additionally store:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li><strong>Your email address and a unique account ID</strong> — provided by Google when you sign in. We use these to recognize you on future visits and re-link you to your household.</li>
+                        <li><strong>Consent records</strong> — whether you accepted these terms (and which version) and whether you opted in to occasional product update emails.</li>
+                      </ul>
+                      <p>If you don't sign in, we never see your email or any Google profile data. We do <strong>not</strong> collect your phone number, address, payment info, IP address (beyond standard server logs), or any other personally identifying information.</p>
+
+                      <h3 className="text-base font-semibold text-gray-200 pt-2">Accounts (optional)</h3>
+                      <p>You can use Couch Potatoes without an account — your household lives in your browser and in our database, identified only by a random household ID. If you want to sync across devices or pair with a partner more easily, you can sign in with Google.</p>
+                      <p>When you sign in, Google verifies your identity. <strong>We never see or store your Google password.</strong> We receive an email address and a stable user ID, which we store in our authentication system (Supabase Auth). Your email and account ID are kept separate from your household record — your partner only ever sees the display name you chose during onboarding, not your email.</p>
+                      <p>You can sign out at any time from the Account menu inside the app. To permanently delete your account and all associated data, email <a href="mailto:help@couchpotatoes.co" className="text-orange-300 underline">help@couchpotatoes.co</a>.</p>
 
                       <h3 className="text-base font-semibold text-gray-200 pt-2">What we do NOT collect</h3>
                       <ul className="list-disc pl-5 space-y-1">
@@ -5047,13 +5139,13 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                       <p>If you clear your browser's site data, your local household ID will be removed and you'll need to enter it again to get back into your household.</p>
 
                       <h3 className="text-base font-semibold text-gray-200 pt-2">A note on access</h3>
-                      <p>Your household ID is the only credential needed to access your household. Anyone you share it with — or anyone who sees it on your screen or in your browser — will have full access to view and modify your household's data, including your favorites, watch state, and profile names. Treat it like a password: only share it with the partner you're watching with, and don't post it publicly.</p>
-                      <p>We can't currently revoke access for someone you've shared your household ID with. If you need to "kick someone out," email us and we'll help you migrate to a new household ID.</p>
+                      <p>If you haven't signed in, your household ID is the only credential needed to access your household. Anyone you share it with — or anyone who sees it on your screen or in your browser — will have full access to view and modify your household's data, including your favorites, watch state, and profile names. Treat it like a password: only share it with the partner you're watching with, and don't post it publicly.</p>
+                      <p>We can't currently revoke access for someone you've shared your household ID with. If you need to "kick someone out," email us and we'll help you migrate to a new household ID. (Account-based access controls are coming in a future update.)</p>
 
                       <h3 className="text-base font-semibold text-gray-200 pt-2">Sharing your data</h3>
                       <p>We don't share your data with anyone. We don't sell it. We don't license it. The only third parties that ever touch your data are:</p>
                       <ul className="list-disc pl-5 space-y-1">
-                        <li><strong>Supabase</strong> — stores it (they're our database host)</li>
+                        <li><strong>Supabase</strong> — stores your household data and (if you sign in) handles authentication</li>
                         <li><strong>TMDB</strong> — provides the movie metadata you see (they don't receive your data)</li>
                         <li><strong>Anthropic</strong> — processes "why you'd like this" prompts (they receive only your first name + a movie title)</li>
                         <li><strong>Cloudflare</strong> — serves the website (standard CDN logs)</li>
@@ -5077,6 +5169,61 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                       <p>Questions, concerns, data requests? Email <a href="mailto:help@couchpotatoes.co" className="text-orange-300 underline">help@couchpotatoes.co</a>.</p>
                     </React.Fragment>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ ACCOUNT MODAL ═══ */}
+          {accountModal && (
+            <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm fade-in" onClick={() => setAccountModal(false)} />
+              <div className="relative w-full md:w-[440px] bg-gray-900 border border-gray-700 md:rounded-2xl rounded-t-3xl max-h-[88vh] md:max-h-[85vh] flex flex-col slide-up md:fade-in">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900 md:rounded-t-2xl rounded-t-3xl">
+                  <h2 className="text-lg font-semibold text-gray-100">Account</h2>
+                  <button onClick={() => setAccountModal(false)} className="text-gray-500 hover:text-white p-2 -mr-2 active:scale-95" aria-label="Close">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <div className="overflow-y-auto px-6 py-5 text-sm text-gray-300 leading-relaxed space-y-5">
+                  {authLoading ? (
+                    <p className="text-gray-500">Loading…</p>
+                  ) : authUser ? (
+                    <React.Fragment>
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Signed in as</div>
+                        <div className="text-gray-100 font-medium break-all">{authUser.email}</div>
+                      </div>
+                      <button
+                        onClick={signOut}
+                        className="w-full px-4 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-100 font-medium active:scale-[0.99] transition"
+                      >
+                        Sign out
+                      </button>
+                    </React.Fragment>
+                  ) : (
+                    <React.Fragment>
+                      <p className="text-gray-400">Sign in to sync your household across devices and pair with your partner more easily. Signing in is optional — your data lives in this browser either way.</p>
+                      <button
+                        onClick={signInWithGoogle}
+                        className="w-full px-4 py-3 rounded-xl bg-white hover:bg-gray-100 text-gray-900 font-semibold flex items-center justify-center gap-3 active:scale-[0.99] transition"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                          <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                          <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+                          <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+                          <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                        </svg>
+                        Sign in with Google
+                      </button>
+                    </React.Fragment>
+                  )}
+
+                  <div className="pt-3 border-t border-gray-800">
+                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Household ID</div>
+                    <div className="text-gray-300 font-mono text-xs break-all">{householdIdRef.current || "—"}</div>
+                    <p className="text-xs text-gray-500 mt-2">Share this with your partner so they can join your household.</p>
+                  </div>
                 </div>
               </div>
             </div>
