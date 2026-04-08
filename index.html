@@ -4557,7 +4557,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   {/* Share card */}
                   <div className="rounded-2xl p-5 mb-5"
                     style={{ background: "linear-gradient(135deg, rgba(120,40,20,0.3) 0%, rgba(120,20,40,0.22) 100%)", border: "1px solid rgba(251,146,60,0.2)" }}>
-                    <SectionLabel>Their private link</SectionLabel>
+                    <SectionLabel>{partnerName}'s invite link</SectionLabel>
                     <div className="flex items-center gap-2 mb-3">
                       <div className="flex-1 min-w-0 bg-gray-900/60 border border-gray-700 rounded-xl px-3 py-2.5 overflow-hidden">
                         <div className="text-[0.8125rem] text-gray-300 font-mono truncate">{shareUrl}</div>
@@ -4572,9 +4572,6 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>
                       {handoffShared ? "Share again" : "Share link"}
                     </button>
-                    <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
-                      Anyone with this link can fill out {partnerName}'s half. Keep it between the two of you. Down the line you'll be able to save everything to an account so it follows you across devices.
-                    </p>
                   </div>
 
                   {(handoffShared || handoffCopied) ? (
