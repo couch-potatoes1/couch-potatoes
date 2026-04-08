@@ -1,0 +1,6 @@
+# Design mockups and scratch HTML previews — kept locally as
+# reference for layout/copy exploration, not part of the app.
+mockups/
+
+# macOS
+.DS_Store
