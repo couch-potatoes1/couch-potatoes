@@ -5292,17 +5292,21 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                         if (isMobile && navigator.share) {
                           try {
                             await navigator.share({ title: "Couch Potatoes", text, url: shareUrl });
+                            setAccountModal(false);
                             return;
                           } catch (e) {
-                            if (e && e.name === "AbortError") return; // user cancelled
+                            if (e && e.name === "AbortError") return; // user cancelled, keep modal open
                             // otherwise fall through to clipboard fallback
                           }
                         }
                         try {
                           await navigator.clipboard.writeText(`${text} ${shareUrl}`);
+                          setAccountModal(false);
                           setToastMsg("Invite link copied");
+                          setTimeout(() => setToastMsg(""), 2500);
                         } catch {
                           setToastMsg("Couldn't copy — try again");
+                          setTimeout(() => setToastMsg(""), 2500);
                         }
                       }}
                       className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-rose-500 text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.99] transition shadow-lg shadow-rose-900/30"
@@ -5391,7 +5395,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
 
           {/* ═══ TOAST MESSAGE ═══ */}
           {toastMsg && (
-            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-3 rounded-lg text-xs z-40 fade-in break-words" style={{ maxWidth: "85vw", minWidth: 200 }}>
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-3 rounded-lg text-xs z-[60] fade-in break-words" style={{ maxWidth: "85vw", minWidth: 200 }}>
               {toastMsg}
             </div>
           )}
