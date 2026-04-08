@@ -2051,15 +2051,11 @@ Output ONLY the line.`;
       // user can accept Terms + choose their marketing preference before we
       // let them into the rest of the app's auth-gated surface.
       //
-      // Two states for the same modal:
-      //   'needed-A'  → brand-new account (first sign-in). Header: "Almost there".
-      //   'needed-B'  → existing account missing a consent row (rare recovery
-      //                 path — data wipe, pre-rollout signup, etc). Header:
-      //                 "Quick housekeeping" with a yellow banner.
-      //
-      // Detection heuristic: 30-minute window since auth.users.created_at.
-      // Inside the window we assume State A; outside, State B.
-      const [consentStatus, setConsentStatus] = useState('unknown'); // 'unknown' | 'needed-A' | 'needed-B' | 'ok' | 'error'
+      // One unified state covers both first sign-in and the rare recovery
+      // path (row missing on a pre-existing account). The user's situation
+      // is the same either way — tick the box and continue — so we don't
+      // bother distinguishing them in the UI.
+      const [consentStatus, setConsentStatus] = useState('unknown'); // 'unknown' | 'needed' | 'ok' | 'error'
       const [consentChecking, setConsentChecking] = useState(false);
       const [consentTerms, setConsentTerms] = useState(false);
       const [consentMarketing, setConsentMarketing] = useState(false);
@@ -2089,14 +2085,7 @@ Output ONLY the line.`;
               setConsentStatus('error');
               return;
             }
-            if (data) {
-              setConsentStatus('ok');
-              return;
-            }
-            // No consent row — figure out State A vs State B by account age.
-            const createdAt = authUser.created_at ? new Date(authUser.created_at) : null;
-            const ageMinutes = createdAt ? (Date.now() - createdAt.getTime()) / 60000 : Infinity;
-            setConsentStatus(ageMinutes <= 30 ? 'needed-A' : 'needed-B');
+            setConsentStatus(data ? 'ok' : 'needed');
           } catch (e) {
             if (cancelled) return;
             console.error('[Couch Potatoes] consent check error', e);
@@ -5477,20 +5466,16 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
 
           {/* ═══ CONSENT MODAL ═══
               Shown after a successful sign-in when the user has no row in
-              user_consents. Two visual states:
-                State A ('needed-A'): first sign-in — friendly intro copy.
-                State B ('needed-B'): missing row recovery — yellow banner.
-              Dismissing (X) signs the user back out so they're never left
-              in a signed-in-but-no-consent half-state. z-[70] puts this
+              user_consents (covers both first sign-in and the rare recovery
+              path). Dismissing (X) signs the user back out so they're never
+              left in a signed-in-but-no-consent half-state. z-[70] puts this
               above the Account modal (z-50) and the toast (z-[60]). */}
-          {(consentStatus === 'needed-A' || consentStatus === 'needed-B') && authUser && (
+          {consentStatus === 'needed' && authUser && (
             <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
               <div className="absolute inset-0 bg-black/80 backdrop-blur-md fade-in" />
               <div className="relative w-full md:w-[480px] bg-gray-900 border border-gray-700 md:rounded-2xl rounded-t-3xl max-h-[92vh] md:max-h-[86vh] flex flex-col slide-up md:fade-in">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900 md:rounded-t-2xl rounded-t-3xl">
-                  <h2 className="text-lg font-semibold text-gray-100">
-                    {consentStatus === 'needed-A' ? 'Almost there' : 'Quick housekeeping'}
-                  </h2>
+                  <h2 className="text-lg font-semibold text-gray-100">Almost there</h2>
                   <button onClick={dismissConsent} className="text-gray-500 hover:text-white p-2 -mr-2 active:scale-95" aria-label="Cancel sign-in">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
@@ -5506,25 +5491,6 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                       <div className="text-[11px] text-gray-500 truncate">{authUser.email}</div>
                     </div>
                   </div>
-
-                  {/* State A intro copy */}
-                  {consentStatus === 'needed-A' && (
-                    <p className="text-gray-300 text-[14px] leading-relaxed mb-5">
-                      Before we save your account, two quick things.
-                    </p>
-                  )}
-
-                  {/* State B recovery banner */}
-                  {consentStatus === 'needed-B' && (
-                    <div className="flex gap-2.5 items-start p-3 mb-5 bg-amber-500/[0.06] border border-amber-500/20 rounded-xl">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" className="flex-shrink-0 mt-0.5">
-                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                      </svg>
-                      <div className="text-[12.5px] text-amber-200 leading-snug">
-                        We couldn't find your saved consent on record. Please confirm to continue.
-                      </div>
-                    </div>
-                  )}
 
                   {/* Required: Terms + Privacy */}
                   <label
