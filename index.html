@@ -1899,13 +1899,11 @@ Output ONLY the line.`;
       // Partner-2 join flow: start both name inputs empty regardless of
       // saved state. Without this, if partner 1 tests the invite link on
       // the same browser, their saved name ("Alex") pre-fills the form
-      // that's supposed to be for the NEW person joining.
-      const isJoinLanding = (() => {
-        try { return !!new URLSearchParams(window.location.search).get("join"); }
-        catch { return false; }
-      })();
-      const [inputName1, setInputName1] = useState(isJoinLanding ? "" : (saved?.profile1?.name || ""));
-      const [inputName2, setInputName2] = useState(isJoinLanding ? "" : (saved?.profile2?.name || ""));
+      // that's supposed to be for the NEW person joining. We check
+      // urlBootstrap.join (not window.location.search) because the
+      // urlBootstrap useMemo above already stripped the query param.
+      const [inputName1, setInputName1] = useState(urlBootstrap.join ? "" : (saved?.profile1?.name || ""));
+      const [inputName2, setInputName2] = useState(urlBootstrap.join ? "" : (saved?.profile2?.name || ""));
       const [profile1, setProfile1] = useState(saved?.profile1 || { name: "", genres: [], favorites: [], dealbreakers: [], eraPrefs: [], pacePrefs: [] });
       const [profile2, setProfile2] = useState(saved?.profile2 || { name: "", genres: [], favorites: [], dealbreakers: [], eraPrefs: [], pacePrefs: [] });
       const [services, setServices] = useState(saved?.services || []);
@@ -3777,13 +3775,10 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                       <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3 leading-[1.1]">
                         {profile1.name ? `${profile1.name} invited you` : "You've been invited"}
                       </h1>
-                      <p className="text-gray-300 text-[17px] leading-snug max-w-[380px] mx-auto mb-3">
-                        Couch Potatoes helps couples who can't agree on what to watch find something they'll both actually love.
-                      </p>
-                      <p className="text-gray-400 text-[15px] leading-snug max-w-[380px] mx-auto">
+                      <p className="text-gray-300 text-[17px] leading-snug max-w-[380px] mx-auto">
                         {profile1.name
-                          ? `${profile1.name} already built their taste profile — take ~2 min to build yours, and we'll start recommending stuff you'll both actually like.`
-                          : "Your partner already built their taste profile — take ~2 min to build yours, and we'll start recommending stuff you'll both actually like."}
+                          ? `${profile1.name} already built their taste profile. Take ~2 min to build yours — we'll blend them and find movies and shows you'll both love.`
+                          : "Your partner already built their taste profile. Take ~2 min to build yours — we'll blend them and find movies and shows you'll both love."}
                       </p>
                     </div>
                     <div className="w-full">
