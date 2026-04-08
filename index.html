@@ -3736,10 +3736,13 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                       <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-300 via-rose-300 to-orange-300 bg-clip-text text-transparent mb-3 leading-[1.1]">
                         {profile1.name ? `${profile1.name} invited you` : "You've been invited"}
                       </h1>
-                      <p className="text-gray-300 text-lg leading-snug max-w-[360px] mx-auto">
+                      <p className="text-gray-300 text-[17px] leading-snug max-w-[380px] mx-auto mb-3">
+                        Couch Potatoes is a movie + TV picker for couples who can't agree on what to watch.
+                      </p>
+                      <p className="text-gray-400 text-[15px] leading-snug max-w-[380px] mx-auto">
                         {profile1.name
-                          ? `${profile1.name} already filled out their half. Take ~2 minutes to fill out yours and we'll start matching you up.`
-                          : "Take ~2 minutes to fill out your half and we'll start matching you up."}
+                          ? `${profile1.name} already built their taste profile — take ~2 min to build yours, and we'll start recommending stuff you'll both actually like.`
+                          : "Your partner already built their taste profile — take ~2 min to build yours, and we'll start recommending stuff you'll both actually like."}
                       </p>
                     </div>
                     <div className="w-full">
@@ -3747,7 +3750,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                         className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
                         Start my profile
                       </button>
-                      <p className="text-gray-600 text-xs mt-4 text-center">No more 20-minute scroll fights.</p>
+                      <p className="text-gray-600 text-xs mt-4 text-center">Stop scrolling. Start watching.</p>
                     </div>
                   </>
                 ) : (
@@ -3797,9 +3800,9 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   <h2 className="text-[1.875rem] font-extrabold mb-2 tracking-tight leading-[1.15]">
                     {profile1.name ? `${profile1.name} invited you` : "You've been invited"}
                   </h2>
-                  <p className="text-gray-400 text-[0.9375rem] mb-3">Couch Potatoes 🥔 picks movies and shows you'll <span className="text-gray-200 font-medium">both</span> actually want to watch — no more 20-minute scroll fights.</p>
+                  <p className="text-gray-400 text-[0.9375rem] mb-3">Couch Potatoes 🥔 is a movie + TV picker for couples — each of you builds a taste profile and we recommend stuff you'll <span className="text-gray-200 font-medium">both</span> actually like.</p>
                   <p className="text-gray-400 text-[0.9375rem] mb-9">
-                    {profile1.name ? `${profile1.name} already filled out their half.` : "Your partner already filled out their half."} Take ~2 minutes to fill out yours and we'll start matching you up.
+                    {profile1.name ? `${profile1.name} already built their profile.` : "Your partner already built their profile."} Take ~2 min to build yours.
                   </p>
                   <div className="space-y-5">
                     <div>
@@ -5250,15 +5253,28 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                           }
                         } catch {}
                         const myName = profile1?.name || "I";
-                        const text = `${myName} started a Couch Potatoes profile for us 🥔 it's an app that picks movies + shows we'll BOTH actually want to watch — no more 20-minute scroll fights. Take 2 min to fill out your half:`;
-                        try {
-                          if (navigator.share) {
+                        const text = `${myName} started a Couch Potatoes profile for us 🥔 it's an app that picks movies + shows we'll BOTH actually want to watch. Take 2 min to fill out your half:`;
+                        // On touch devices prefer the native share sheet; on
+                        // desktop Chrome navigator.share also exists but opens
+                        // a share panel the user often dismisses, so we fall
+                        // back to straight clipboard copy there (which is what
+                        // most desktop users actually expect).
+                        const isMobile = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || "");
+                        if (isMobile && navigator.share) {
+                          try {
                             await navigator.share({ title: "Couch Potatoes", text, url: shareUrl });
-                          } else {
-                            await navigator.clipboard.writeText(`${text} ${shareUrl}`);
-                            setToastMsg("Invite link copied");
+                            return;
+                          } catch (e) {
+                            if (e && e.name === "AbortError") return; // user cancelled
+                            // otherwise fall through to clipboard fallback
                           }
-                        } catch {}
+                        }
+                        try {
+                          await navigator.clipboard.writeText(`${text} ${shareUrl}`);
+                          setToastMsg("Invite link copied");
+                        } catch {
+                          setToastMsg("Couldn't copy — try again");
+                        }
                       }}
                       className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-rose-500 text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.99] transition shadow-lg shadow-rose-900/30"
                     >
