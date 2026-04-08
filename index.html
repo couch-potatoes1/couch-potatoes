@@ -5219,10 +5219,33 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </React.Fragment>
                   )}
 
-                  <div className="pt-3 border-t border-gray-800">
-                    <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">Household ID</div>
-                    <div className="text-gray-300 font-mono text-xs break-all">{householdIdRef.current || "—"}</div>
-                    <p className="text-xs text-gray-500 mt-2">Share this with your partner so they can join your household.</p>
+                  <div className="pt-4 border-t border-gray-800">
+                    <button
+                      onClick={async () => {
+                        const id = householdIdRef.current || "";
+                        let shareUrl = `${window.location.origin}${window.location.pathname}?join=${id}`;
+                        try {
+                          if (window.location.protocol === "file:") {
+                            shareUrl = window.location.href.split("?")[0].split("#")[0] + `?join=${id}`;
+                          }
+                        } catch {}
+                        const myName = profile1?.name || "I";
+                        const text = `${myName} started a Couch Potatoes profile for us 🥔 it's an app that picks movies + shows we'll BOTH actually want to watch — no more 20-minute scroll fights. Take 2 min to fill out your half:`;
+                        try {
+                          if (navigator.share) {
+                            await navigator.share({ title: "Couch Potatoes", text, url: shareUrl });
+                          } else {
+                            await navigator.clipboard.writeText(`${text} ${shareUrl}`);
+                            setToastMsg("Invite link copied");
+                          }
+                        } catch {}
+                      }}
+                      className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-rose-500 text-white font-semibold flex items-center justify-center gap-2 active:scale-[0.99] transition shadow-lg shadow-rose-900/30"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+                      Invite your partner
+                    </button>
+                    <p className="text-xs text-gray-500 mt-2 text-center">They'll fill out their half on their own device.</p>
                   </div>
                 </div>
               </div>
