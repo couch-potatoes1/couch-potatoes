@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Couch Potatoes — Decide what to watch, together</title>
-  <meta name="description" content="A movie + TV picker for couples (or solo viewers) who can't decide what to watch. Build a quick taste profile and get recommendations you'll both actually want." />
+  <meta name="description" content="For couples (or solo viewers) who can't decide what to watch. Build a quick taste profile and get recommendations you'll both actually love." />
 
   <!-- Open Graph / share preview metadata. Used by iMessage, WhatsApp, Slack,
        Twitter, Facebook, Discord, etc. when someone pastes a Couch Potatoes
@@ -16,7 +16,7 @@
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Couch Potatoes" />
   <meta property="og:title" content="Couch Potatoes — Decide what to watch, together" />
-  <meta property="og:description" content="A movie + TV picker for couples who can't decide. Build a taste profile, get recommendations you'll both actually want." />
+  <meta property="og:description" content="For couples who can't decide what to watch. Build a taste profile, get recommendations you'll both actually love." />
   <meta property="og:url" content="https://couchpotatoes.co/" />
   <meta property="og:image" content="/og-image.png" />
   <meta property="og:image:width" content="1200" />
@@ -24,7 +24,7 @@
   <meta property="og:image:alt" content="Couch Potatoes — Decide what to watch, together" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Couch Potatoes — Decide what to watch, together" />
-  <meta name="twitter:description" content="A movie + TV picker for couples who can't decide. Build a taste profile, get recommendations you'll both actually want." />
+  <meta name="twitter:description" content="For couples who can't decide what to watch. Build a taste profile, get recommendations you'll both actually love." />
   <meta name="twitter:image" content="/og-image.png" />
 
   <!-- Emoji-as-favicon. SVG with a single <text> node renders the OS's
@@ -3770,7 +3770,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                         {profile1.name ? `${profile1.name} invited you` : "You've been invited"}
                       </h1>
                       <p className="text-gray-300 text-[17px] leading-snug max-w-[380px] mx-auto mb-3">
-                        Couch Potatoes is a movie + TV picker for couples who can't agree on what to watch.
+                        Couch Potatoes helps couples who can't agree on what to watch find something they'll both actually love.
                       </p>
                       <p className="text-gray-400 text-[15px] leading-snug max-w-[380px] mx-auto">
                         {profile1.name
@@ -3829,24 +3829,23 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               <Progress screen={screen} partnerName={null} editing={editingFromReview} />
               {urlBootstrap.join ? (
                 <>
-                  <div className="text-5xl mb-3">💌</div>
-                  <h2 className="text-[1.875rem] font-extrabold mb-2 tracking-tight leading-[1.15]">
-                    {profile1.name ? `${profile1.name} invited you` : "You've been invited"}
-                  </h2>
-                  <p className="text-gray-400 text-[0.9375rem] mb-3">Couch Potatoes 🥔 is a movie + TV picker for couples — each of you builds a taste profile and we recommend stuff you'll <span className="text-gray-200 font-medium">both</span> actually like.</p>
-                  <p className="text-gray-400 text-[0.9375rem] mb-9">
-                    {profile1.name ? `${profile1.name} already built their profile.` : "Your partner already built their profile."} Take ~2 min to build yours.
-                  </p>
+                  {/* Partner-2 join flow: the welcome landing already
+                      greeted them and explained what this is, so the
+                      setup page is purely a name-entry form. No
+                      repeat of "Alex invited you", no repeat of the
+                      explainer — the progress bar above is their
+                      anchor. */}
+                  <h2 className="text-[1.875rem] font-extrabold mb-2 tracking-tight leading-[1.15]">What's your name?</h2>
+                  <p className="text-gray-400 text-[0.9375rem] mb-9">We'll use it to label your picks.</p>
                   <div className="space-y-5">
                     <div>
-                      <label htmlFor="partner1name" className="text-sm text-gray-400 mb-2 block">Your name</label>
                       <input id="partner1name" name="partner1name" type="text" autoComplete="given-name" value={inputName1} onChange={e => setInputName1(e.target.value)} placeholder="e.g. Sam" autoFocus maxLength={24}
                         onKeyDown={e => { if (e.key === "Enter") handleSetup(); }}
                         className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:border-orange-400" />
                       {inputName1.length > 18 && <p className="text-xs text-amber-300/80 mt-2">Heads up — a nickname or first name reads best on movie rows.</p>}
                     </div>
                     <button onClick={handleSetup} disabled={!inputName1.trim()}
-                      className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg disabled:opacity-30 active:scale-95">Start my profile</button>
+                      className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg disabled:opacity-30 active:scale-95">Continue</button>
                   </div>
                 </>
               ) : (
