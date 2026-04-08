@@ -2120,6 +2120,7 @@ Output ONLY the line.`;
             .insert({
               user_id: authUser.id,
               terms_accepted_at: nowIso,
+              terms_version: 'v1-2026-04',
               marketing_opted_in: consentMarketing,
               marketing_opted_in_at: consentMarketing ? nowIso : null,
             });
