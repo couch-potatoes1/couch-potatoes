@@ -992,12 +992,12 @@ Output ONLY the paragraph.`;
       // Desktop sizes are slightly larger: xl 185x278, large 160x240
       const isDesktopSize = isDesktop && typeof window !== 'undefined' && window.innerWidth >= 768;
       const w = size === "xl"
-        ? (isDesktopSize ? 200 : 170)
+        ? (isDesktopSize ? 200 : 155)
         : size === "large"
           ? (isDesktopSize ? 160 : 130)
           : size === "medium" ? 100 : 60;
       const h = size === "xl"
-        ? (isDesktopSize ? 300 : 255)
+        ? (isDesktopSize ? 300 : 232)
         : size === "large"
           ? (isDesktopSize ? 240 : 195)
           : size === "medium" ? 150 : 90;
@@ -1076,8 +1076,8 @@ Output ONLY the paragraph.`;
 
       const posterSize = featured ? "xl" : "large";
       const isDesktopQuery = typeof window !== 'undefined' && window.innerWidth >= 768;
-      const skeletonW = featured ? (isDesktopQuery ? 200 : 170) : (isDesktopQuery ? 160 : 130);
-      const skeletonH = featured ? (isDesktopQuery ? 300 : 255) : (isDesktopQuery ? 240 : 195);
+      const skeletonW = featured ? (isDesktopQuery ? 200 : 155) : (isDesktopQuery ? 160 : 130);
+      const skeletonH = featured ? (isDesktopQuery ? 300 : 232) : (isDesktopQuery ? 240 : 195);
 
       return (
         <div className={featured ? "mb-4" : "mb-0"}>
@@ -4983,22 +4983,28 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </>
                   ) : (
                     <>
-                      {/* Or do it together */}
-                      <div className="flex items-center gap-3 my-5">
-                        <div className="flex-1 h-px bg-gray-800" />
-                        <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">or</span>
-                        <div className="flex-1 h-px bg-gray-800" />
-                      </div>
+                      {/* Or do it together / go solo — only during onboarding.
+                          Post-onboarding (user already has recs), the back button
+                          is sufficient so we hide these options. */}
+                      {categories.length === 0 && (
+                        <>
+                          <div className="flex items-center gap-3 my-5">
+                            <div className="flex-1 h-px bg-gray-800" />
+                            <span className="text-[11px] uppercase tracking-wider text-gray-500 font-semibold">or</span>
+                            <div className="flex-1 h-px bg-gray-800" />
+                          </div>
 
-                      <button onClick={() => { setCurrentUser(2); goTo(S.PROFILE_GENRES); }}
-                        className="w-full py-3.5 rounded-2xl border border-gray-700 hover:border-orange-500/40 text-gray-200 font-semibold text-[0.9375rem] transition-all active:scale-95 mb-3">
-                        Fill it out together on this device
-                      </button>
+                          <button onClick={() => { setCurrentUser(2); goTo(S.PROFILE_GENRES); }}
+                            className="w-full py-3.5 rounded-2xl border border-gray-700 hover:border-orange-500/40 text-gray-200 font-semibold text-[0.9375rem] transition-all active:scale-95 mb-3">
+                            Fill it out together on this device
+                          </button>
 
-                      <button onClick={() => goTo(S.SESSION_PREFS)}
-                        className="w-full py-3 text-gray-500 hover:text-gray-300 text-sm font-medium transition-colors">
-                        Skip — just me for now →
-                      </button>
+                          <button onClick={() => goTo(S.SESSION_PREFS)}
+                            className="w-full py-3 text-gray-500 hover:text-gray-300 text-sm font-medium transition-colors">
+                            Skip — just me for now →
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -5218,7 +5224,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   <React.Fragment>
                     {/* ── Top picks zone ── */}
                     {categories[0] && (
-                      <div className="bg-gradient-to-b from-rose-950/30 via-orange-950/15 to-transparent pt-8 md:pt-10 pb-6 mb-0">
+                      <div className="bg-gradient-to-b from-rose-950/30 via-orange-950/15 to-transparent pt-5 md:pt-10 pb-4 mb-0">
                         <MovieRow title={categories[0].title} icon={categories[0].icon}
                           items={categories[0].items.length > BATCH_SIZE ? getVisibleItems(0, categories[0].items) : categories[0].items}
                           onSelect={setSelectedMovie} featured={true} watchlist={watchlist}
