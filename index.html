@@ -5064,25 +5064,21 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               {/* ── Desktop nav (V3-B: centered brand, warm gradient) ── */}
               <div className="hidden md:block" style={{ background: "linear-gradient(180deg, rgba(40,20,25,0.6) 0%, rgba(30,15,20,0.2) 70%, transparent 100%)" }}>
                 <div className="grid items-center px-12 lg:px-16 py-3" style={{ maxWidth: 1280, margin: "0 auto", gridTemplateColumns: "1fr auto 1fr" }}>
-                  {/* Left: sign-in/out + names as profile trigger + watchlist */}
+                  {/* Left: avatar+name (opens profiles) + watchlist */}
                   <div className="flex items-center gap-3 min-w-0 justify-self-start">
-                    {authUser ? (
-                      <button onClick={() => setAccountModal(true)}
-                        aria-label="Account"
-                        title={`Signed in as ${authUser.email}`}
-                        className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
-                        style={{ background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }}>
-                        {(authUser.email?.[0] || "?").toUpperCase()}
-                      </button>
-                    ) : (
-                      <button onClick={signInWithGoogle}
-                        className="flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-white transition-colors active:scale-95 whitespace-nowrap font-medium">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
-                        Sign in
-                      </button>
-                    )}
                     <button onClick={() => { setShowProfileSheet(true); try { window.history.pushState({ overlay: "profile" }, ""); } catch {} }}
-                      className="text-sm text-gray-400 hover:text-white transition-colors active:scale-95 whitespace-nowrap">
+                      className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors active:scale-95 whitespace-nowrap">
+                      {authUser ? (
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0"
+                          style={{ background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }}>
+                          {(authUser.email?.[0] || "?").toUpperCase()}
+                        </div>
+                      ) : (
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{ background: "rgba(255,255,255,0.06)", color: "rgb(156,163,175)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+                        </div>
+                      )}
                       {isSolo ? profile1.name : `${profile1.name} + ${profile2.name}`}
                     </button>
                     <button onClick={() => { setShowWatchlist(true); try { window.history.pushState({ overlay: "watchlist" }, ""); } catch {} }}
@@ -5119,19 +5115,16 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               {/* ── Mobile title row ── */}
               <div className="md:hidden px-5 pt-4 pb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {authUser ? (
-                    <button onClick={() => setAccountModal(true)}
-                      aria-label="Account"
-                      className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
-                      style={{ background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }}>
-                      {(authUser.email?.[0] || "?").toUpperCase()}
-                    </button>
-                  ) : (
-                    <button onClick={signInWithGoogle}
-                      className="text-[12px] text-gray-400 hover:text-white transition-colors active:scale-95 font-medium whitespace-nowrap mr-1">
-                      Sign in
-                    </button>
-                  )}
+                  <button onClick={() => { setShowProfileSheet(true); try { window.history.pushState({ overlay: "profile" }, ""); } catch {} }}
+                    aria-label="Profiles"
+                    className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95 flex-shrink-0"
+                    style={authUser
+                      ? { background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }
+                      : { background: "rgba(255,255,255,0.06)", color: "rgb(156,163,175)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    {authUser
+                      ? (authUser.email?.[0] || "?").toUpperCase()
+                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>}
+                  </button>
                   <span className="text-base">🥔</span>
                   <span className="font-extrabold text-lg tracking-tight text-white/90">COUCH POTATOES</span>
                 </div>
@@ -5141,9 +5134,6 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     {watchlist.size > 0 && (
                       <span className="absolute top-0 right-0 w-5 h-5 bg-violet-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{watchlist.size}</span>
                     )}
-                  </button>
-                  <button onClick={() => { setShowProfileSheet(true); try { window.history.pushState({ overlay: "profile" }, ""); } catch {} }} className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors active:scale-95">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
                   </button>
                 </div>
               </div>
@@ -5470,6 +5460,26 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     )}
                   </div>
 
+                  {/* Sign in / Sign out — lives at the bottom of the
+                      profile sheet so it's always reachable from the
+                      avatar+name button in the nav. */}
+                  {authUser ? (
+                    <button
+                      onClick={() => { setShowProfileSheet(false); signOut(); }}
+                      className="w-full mt-2 py-3 text-[13px] text-gray-500 hover:text-gray-300 transition-colors active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                      Sign out
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { setShowProfileSheet(false); signInWithGoogle(); }}
+                      className="w-full mt-2 py-3 text-[13px] text-orange-300 hover:text-orange-200 transition-colors active:scale-95 flex items-center justify-center gap-2 font-medium"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                      Create an account or sign in
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
