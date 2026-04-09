@@ -70,6 +70,29 @@
     .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     @keyframes slideLeft { from { transform: translateX(100%); } to { transform: translateX(0); } }
     .slide-left { animation: slideLeft 0.3s ease-out; }
+    /* Sticky CTA bar — frosted glass + gradient fade (Option C).
+       Place inside a scroll container; the bar sticks to the bottom
+       while content scrolls behind it with a smooth dissolve. */
+    .sticky-cta {
+      position: sticky; bottom: 0; left: 0; right: 0;
+      padding: 0.875rem 0 1.5rem;
+      background: rgba(12, 10, 20, 0.75);
+      backdrop-filter: blur(20px) saturate(1.8);
+      -webkit-backdrop-filter: blur(20px) saturate(1.8);
+      border-top: 1px solid rgba(255,255,255,0.05);
+      z-index: 5;
+      margin: 0 -2rem; /* bleed to edges of px-8 parent */
+      padding-left: 2rem; padding-right: 2rem;
+    }
+    .sticky-cta::before {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      bottom: 100%;
+      height: 60px;
+      background: linear-gradient(to top, rgba(12,10,20,0.6) 0%, transparent 100%);
+      pointer-events: none;
+    }
     @media (min-width: 768px) {
     }
   </style>
@@ -4331,10 +4354,12 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                 </div>
               )}
 
-              <button onClick={() => { setCurrentUser(1); goTo(S.PROFILE_GENRES); }}
-                className="mt-auto mb-8 w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
-                {services.length > 0 ? `Continue with ${services.length} service${services.length !== 1 ? "s" : ""}` : "Continue"}
-              </button>
+              <div className="sticky-cta">
+                <button onClick={() => { setCurrentUser(1); goTo(S.PROFILE_GENRES); }}
+                  className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
+                  {services.length > 0 ? `Continue with ${services.length} service${services.length !== 1 ? "s" : ""}` : "Continue"}
+                </button>
+              </div>
              </div>
              {footerEl}
             </div>
@@ -4373,8 +4398,10 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               </div>
 
               {/* Sticky bottom: Early Read card + CTA, always in view */}
+              {/* Gradient fade above the glass bar */}
+              <div className="w-full h-[60px] pointer-events-none" style={{ background: "linear-gradient(to top, rgba(12,10,20,0.6) 0%, transparent 100%)", marginBottom: -1 }} />
               <div className="w-full px-8 pb-5 pt-3 max-w-[600px] mx-auto relative"
-                style={{ background: "linear-gradient(to top, rgb(17,24,39) 70%, rgba(17,24,39,0.85) 88%, rgba(17,24,39,0))" }}>
+                style={{ background: "rgba(12,10,20,0.75)", backdropFilter: "blur(20px) saturate(1.8)", WebkitBackdropFilter: "blur(20px) saturate(1.8)" }}>
                 {!editingFromReview && (
                   <div className="mb-3 rounded-xl px-4 py-3"
                     style={{ background: "rgba(31,41,55,0.82)", border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(10px)" }}>
@@ -4502,17 +4529,19 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                 </div>
               </div>
 
-              {editingFromReview ? (
-                <button onClick={returnToReview}
-                  className="mt-auto mb-8 w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 transition-all duration-200">
-                  {profileSnapshotRef.current !== JSON.stringify(currentProfile) ? "Update" : "Done"}
-                </button>
-              ) : (
-                <button onClick={() => goTo(S.PROFILE_FAVORITES)}
-                  className="mt-auto mb-8 w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 transition-all duration-200">
-                  Add your favorites →
-                </button>
-              )}
+              <div className="sticky-cta">
+                {editingFromReview ? (
+                  <button onClick={returnToReview}
+                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 transition-all duration-200">
+                    {profileSnapshotRef.current !== JSON.stringify(currentProfile) ? "Update" : "Done"}
+                  </button>
+                ) : (
+                  <button onClick={() => goTo(S.PROFILE_FAVORITES)}
+                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95 transition-all duration-200">
+                    Add your favorites →
+                  </button>
+                )}
+              </div>
              </div>{footerEl}</div>
           )}
 
@@ -4569,21 +4598,23 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   {editingFromReview && <p className="text-gray-500 text-xs mb-4">Tap a poster to tag what you love about it.</p>}
                 </>
               )}
-              <button onClick={async () => {
-                  setEditingFromReview(false); setProfileViewFromSheet(false);
-                  setAnalyzingDNA(true); setTasteDNA(null);
-                  goTo(S.PROFILE_REVIEW);
-                  try {
-                    const dna = await analyzeTasteDNA(apiKey, currentProfile, genreMap, anthropicKey);
-                    setTasteDNA(dna);
-                    if (currentUser === 1) setTasteDNA1(dna);
-                    else setTasteDNA2(dna);
-                  } catch (e) { console.error("DNA error:", e); const dnaError = { traits: [], paragraph: "Couldn't analyze — try adding more favorites.", vibe: "Mystery" }; setTasteDNA(dnaError); if (currentUser === 1) setTasteDNA1(dnaError); else setTasteDNA2(dnaError); }
-                  setAnalyzingDNA(false);
-                }} disabled={currentProfile.favorites.length < 3}
-                className="mt-8 mb-8 w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg disabled:opacity-30 active:scale-95">
-                {editingFromReview ? (profileSnapshotRef.current !== JSON.stringify(currentProfile) ? "Update" : "Done") : "See my taste profile"}
-              </button>
+              <div className="sticky-cta">
+                <button onClick={async () => {
+                    setEditingFromReview(false); setProfileViewFromSheet(false);
+                    setAnalyzingDNA(true); setTasteDNA(null);
+                    goTo(S.PROFILE_REVIEW);
+                    try {
+                      const dna = await analyzeTasteDNA(apiKey, currentProfile, genreMap, anthropicKey);
+                      setTasteDNA(dna);
+                      if (currentUser === 1) setTasteDNA1(dna);
+                      else setTasteDNA2(dna);
+                    } catch (e) { console.error("DNA error:", e); const dnaError = { traits: [], paragraph: "Couldn't analyze — try adding more favorites.", vibe: "Mystery" }; setTasteDNA(dnaError); if (currentUser === 1) setTasteDNA1(dnaError); else setTasteDNA2(dnaError); }
+                    setAnalyzingDNA(false);
+                  }} disabled={currentProfile.favorites.length < 3}
+                  className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg disabled:opacity-30 active:scale-95">
+                  {editingFromReview ? (profileSnapshotRef.current !== JSON.stringify(currentProfile) ? "Update" : "Done") : "See my taste profile"}
+                </button>
+              </div>
              </div>{footerEl}</div>
           )}
 
@@ -4768,7 +4799,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                         reviewing Partner 2's half before P1 has started, etc.
                         Keep the legacy switch + main CTA + Start over stack. */}
                 {currentUser === 1 && !profile2.genres.length ? (
-                  <div className="mt-auto mb-8 space-y-3">
+                  <div className="sticky-cta space-y-3">
                     {/* Primary: invite the partner */}
                     <button onClick={() => goTo(S.PARTNER_HANDOFF)}
                       className="w-full py-4 bg-gradient-to-r from-orange-500 to-rose-500 rounded-2xl font-semibold text-lg active:scale-95">
@@ -4805,7 +4836,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     )}
                   </div>
                 ) : (
-                  <div className="mt-auto mb-8 space-y-3">
+                  <div className="sticky-cta space-y-3">
                     {/* Switch to other partner */}
                     {(() => {
                       const otherUser = currentUser === 1 ? 2 : 1;
@@ -5069,7 +5100,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                 </div>
               </div>
 
-              <div className="mt-auto mb-8">
+              <div className="sticky-cta">
                 <button onClick={() => { setChosenMovie(null); goTo(S.RECOMMENDATIONS); fetchRecommendations(); }}
                   className="w-full py-4 bg-gradient-to-r from-rose-500 to-orange-500 rounded-2xl font-semibold text-lg active:scale-95 shadow-lg shadow-rose-900/30">
                   {isSolo ? "Find my picks" : "Find our picks"}
