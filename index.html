@@ -2041,9 +2041,26 @@ Output ONLY the line.`;
           try { sub?.subscription?.unsubscribe?.(); } catch {}
         };
       }, []);
+      // Early redirect: signed-in users should never sit on the welcome
+      // screen. Send them straight to recommendations — cloud sync will
+      // hydrate their profile/recs once they land. The consent modal
+      // will overlay on top if they still need to accept terms.
+      useEffect(() => {
+        if (authLoading) return;
+        if (!authUser) return;
+        if (screen === S.WELCOME) {
+          setScreen(S.RECOMMENDATIONS);
+        }
+      }, [authLoading, authUser, screen]);
+
       const signInWithGoogle = async () => {
         const sb = window.cpSupabase;
         if (!sb) { setToastMsg("Auth not configured"); return; }
+        // If already signed in, just redirect — don't fire a redundant OAuth flow
+        if (authUser) {
+          setScreen(S.RECOMMENDATIONS);
+          return;
+        }
         try {
           await sb.auth.signInWithOAuth({
             provider: 'google',
@@ -2117,8 +2134,8 @@ Output ONLY the line.`;
             // (new device — data loading from cloud sync), stay on
             // welcome; the useEffect below will catch profile1 arriving
             // from cloud sync and redirect then.
-            if (data && screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
-              goTo(categories.length > 0 ? S.RECOMMENDATIONS : S.SESSION_PREFS);
+            if (data && screen === S.WELCOME) {
+              setScreen(S.RECOMMENDATIONS);
             }
           } catch (e) {
             if (cancelled) return;
@@ -2158,8 +2175,8 @@ Output ONLY the line.`;
           // Just accepted consent on the welcome page — redirect if
           // they have a local profile. Otherwise stay; cloud sync will
           // populate profile1 and the useEffect will catch it.
-          if (screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
-            goTo(categories.length > 0 ? S.RECOMMENDATIONS : S.SESSION_PREFS);
+          if (screen === S.WELCOME) {
+            setScreen(S.RECOMMENDATIONS);
           }
         } catch (e) {
           console.error('[Couch Potatoes] consent insert error', e);
@@ -4218,7 +4235,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                         </button>
                         <p className="text-gray-600 text-xs mt-4 text-center">Stop scrolling. Start watching.</p>
                         {/* Returning-user sign-in for new devices / signed-out users */}
-                        {!authUser && (
+                        {!authUser && !authLoading && (
                           <button
                             onClick={signInWithGoogle}
                             className="w-full mt-6 py-3 text-gray-400 hover:text-white text-[13.5px] font-medium transition-colors active:scale-95"
