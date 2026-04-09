@@ -2118,7 +2118,7 @@ Output ONLY the line.`;
             // welcome; the useEffect below will catch profile1 arriving
             // from cloud sync and redirect then.
             if (data && screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
-              goTo(S.SESSION_PREFS);
+              goTo(categories.length > 0 ? S.RECOMMENDATIONS : S.SESSION_PREFS);
             }
           } catch (e) {
             if (cancelled) return;
@@ -2159,7 +2159,7 @@ Output ONLY the line.`;
           // they have a local profile. Otherwise stay; cloud sync will
           // populate profile1 and the useEffect will catch it.
           if (screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
-            goTo(S.SESSION_PREFS);
+            goTo(categories.length > 0 ? S.RECOMMENDATIONS : S.SESSION_PREFS);
           }
         } catch (e) {
           console.error('[Couch Potatoes] consent insert error', e);
@@ -2187,9 +2187,9 @@ Output ONLY the line.`;
         if (!authUser) return;
         if (screen !== S.WELCOME) return;
         if (profile1.genres && profile1.genres.length > 0) {
-          goTo(S.SESSION_PREFS);
+          goTo(categories.length > 0 ? S.RECOMMENDATIONS : S.SESSION_PREFS);
         }
-      }, [consentStatus, authUser, screen, profile1]);
+      }, [consentStatus, authUser, screen, profile1, categories]);
 
       // ═════════════════════════════════════════════════════════════════════
       // HOUSEHOLD LINKING ON SIGN-IN  ⚠️ REVIEW: drafted 2026-04-08, untested
