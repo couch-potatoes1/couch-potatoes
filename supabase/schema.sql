@@ -132,3 +132,71 @@ create policy "user updates own consent"
   on user_consents for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- ============================================================================
+-- HOUSEHOLD_MEMBERS TABLE  ⚠️ REVIEW BEFORE APPLYING
+-- Drafted 2026-04-08 as part of the auth-foundation household linking work.
+-- DO NOT paste into the SQL editor until Alex has reviewed the design.
+--
+-- Purpose: bind a signed-in user to a single household + slot so that when
+-- they sign in on a new device we can pull them back to "their" household
+-- automatically, instead of leaving them stuck on whatever anonymous
+-- household lives in that browser's localStorage.
+--
+-- Design notes:
+--  * One row per user (user_id PK). A user belongs to exactly one household
+--    at a time. If they want to start fresh, we delete their row and let
+--    them re-claim into a new household.
+--  * `slot` is 1 or 2 → maps to households.profile1 / households.profile2.
+--  * `household_id` is text (not FK) because households.id is text and
+--    Phase-1 households can exist without ever being claimed (anonymous
+--    couples). We don't want a hard FK that blocks orphan cleanup.
+--  * RLS: a user can only see and modify THEIR OWN row. They cannot
+--    enumerate other members of the same household via this table — that's
+--    fine for now because the household row itself is still publicly
+--    readable to anyone who knows the id (Phase-1 shared-secret model).
+--  * `on delete cascade` from auth.users — if the user nukes their account,
+--    their membership row goes with it. The household row stays (their
+--    partner may still be using it).
+-- ============================================================================
+create table if not exists household_members (
+  user_id      uuid primary key references auth.users(id) on delete cascade,
+  household_id text        not null,
+  slot         smallint    not null check (slot in (1, 2)),
+  joined_at    timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+-- Lookup partner-side: "who else is in this household?"
+create index if not exists household_members_household_id_idx
+  on household_members (household_id);
+
+drop trigger if exists household_members_touch_updated_at on household_members;
+create trigger household_members_touch_updated_at
+  before update on household_members
+  for each row
+  execute function touch_updated_at();
+
+alter table household_members enable row level security;
+
+drop policy if exists "user reads own membership"   on household_members;
+drop policy if exists "user inserts own membership" on household_members;
+drop policy if exists "user updates own membership" on household_members;
+drop policy if exists "user deletes own membership" on household_members;
+
+create policy "user reads own membership"
+  on household_members for select
+  using (auth.uid() = user_id);
+
+create policy "user inserts own membership"
+  on household_members for insert
+  with check (auth.uid() = user_id);
+
+create policy "user updates own membership"
+  on household_members for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "user deletes own membership"
+  on household_members for delete
+  using (auth.uid() = user_id);

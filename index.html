@@ -2138,6 +2138,231 @@ Output ONLY the line.`;
         setConsentTerms(false);
         setConsentMarketing(false);
       };
+
+      // ═════════════════════════════════════════════════════════════════════
+      // HOUSEHOLD LINKING ON SIGN-IN  ⚠️ REVIEW: drafted 2026-04-08, untested
+      // ─────────────────────────────────────────────────────────────────────
+      // After consent is OK, reconcile the signed-in user against the
+      // `household_members` table so future devices auto-pull "their"
+      // household instead of getting stuck on whatever anonymous household
+      // happens to live in that browser's localStorage.
+      //
+      // Three cases:
+      //   1. No membership row → claim a slot in the local household.
+      //      • Slot 1 open (profile1 empty)  → claim slot 1.
+      //      • Slot 1 taken, slot 2 open     → claim slot 2.
+      //      • Both slots filled             → REVIEW: for now we just
+      //        claim slot 1 anyway and flag in console. Better answer is
+      //        probably "create a fresh household for this account" or
+      //        "ask which slot is yours". Punting on the UI for tomorrow.
+      //
+      //   2. Membership row matches local cp_householdId → no-op.
+      //
+      //   3. Membership row points at a DIFFERENT household than local →
+      //      show the conflict modal so the user can choose:
+      //        • "Use my saved household" → switch localStorage to the
+      //          remembered id and reload (cheapest way to re-bootstrap
+      //          all the state that hangs off householdIdRef).
+      //        • "Stay on this device"    → close modal, leave both as-is.
+      //          We do NOT auto-rewrite the membership row to match the
+      //          new device — that would silently abandon the partner
+      //          who might be using the old household.
+      //
+      // REVIEW: this whole effect runs once per (authUser, consentStatus)
+      // change. It does not retry on failure — if Supabase is down we just
+      // log and move on. The user can sign out + back in to retry.
+      //
+      // REVIEW: depends on the `household_members` table from
+      // supabase/schema.sql. The table is drafted but NOT applied yet. This
+      // effect will hit a "relation does not exist" error until you run
+      // the migration. It's wrapped in try/catch so it won't crash the app.
+      // ═════════════════════════════════════════════════════════════════════
+      const [linkStatus, setLinkStatus] = useState('idle'); // 'idle' | 'checking' | 'ok' | 'conflict' | 'error'
+      const [linkConflict, setLinkConflict] = useState(null); // { savedHouseholdId, localHouseholdId } when status==='conflict'
+      const linkAttemptedRef = useRef(false);
+
+      useEffect(() => {
+        if (consentStatus !== 'ok') return;
+        if (!authUser) return;
+        if (linkAttemptedRef.current) return;
+        const sb = window.cpSupabase;
+        if (!sb) return;
+        linkAttemptedRef.current = true;
+        let cancelled = false;
+        setLinkStatus('checking');
+
+        (async () => {
+          try {
+            const localHH = householdIdRef.current;
+
+            // 1. Look up existing membership for this user.
+            const { data: membership, error: memErr } = await sb
+              .from('household_members')
+              .select('user_id, household_id, slot')
+              .eq('user_id', authUser.id)
+              .maybeSingle();
+            if (cancelled) return;
+            if (memErr) {
+              console.error('[Couch Potatoes] household_members lookup failed', memErr);
+              setLinkStatus('error');
+              return;
+            }
+
+            // Case 2: membership matches local → no-op.
+            if (membership && membership.household_id === localHH) {
+              setLinkStatus('ok');
+              return;
+            }
+
+            // Case 3: membership exists but disagrees with local device.
+            if (membership && membership.household_id !== localHH) {
+              setLinkConflict({
+                savedHouseholdId: membership.household_id,
+                localHouseholdId: localHH,
+                slot: membership.slot,
+              });
+              setLinkStatus('conflict');
+              return;
+            }
+
+            // Case 1: no membership yet → claim a slot in localHH.
+            // Read the local household row to see which slots are taken.
+            const { data: hh, error: hhErr } = await sb
+              .from('households')
+              .select('id, profile1, profile2')
+              .eq('id', localHH)
+              .maybeSingle();
+            if (cancelled) return;
+            if (hhErr) {
+              console.error('[Couch Potatoes] household read failed during link', hhErr);
+              setLinkStatus('error');
+              return;
+            }
+
+            const slot1Taken = !!(hh && hh.profile1 && (hh.profile1.name || (hh.profile1.genres && hh.profile1.genres.length)));
+            const slot2Taken = !!(hh && hh.profile2 && (hh.profile2.name || (hh.profile2.genres && hh.profile2.genres.length)));
+
+            let chosenSlot;
+            if (!slot1Taken)      chosenSlot = 1;
+            else if (!slot2Taken) chosenSlot = 2;
+            else {
+              // Both slots filled and this user has no membership row →
+              // they're a third person signing in on a couple's device.
+              // Surface the "household full" modal so they can start
+              // fresh or sign into an existing account that already has
+              // a household. We do NOT auto-claim a slot.
+              setLinkConflict({
+                type: 'full',
+                localHouseholdId: localHH,
+                profile1Name: hh?.profile1?.name || 'Partner 1',
+                profile2Name: hh?.profile2?.name || 'Partner 2',
+              });
+              setLinkStatus('conflict');
+              return;
+            }
+
+            const { error: insErr } = await sb
+              .from('household_members')
+              .insert({
+                user_id: authUser.id,
+                household_id: localHH,
+                slot: chosenSlot,
+              });
+            if (cancelled) return;
+            if (insErr) {
+              console.error('[Couch Potatoes] household_members insert failed', insErr);
+              setLinkStatus('error');
+              return;
+            }
+            setLinkStatus('ok');
+          } catch (e) {
+            if (cancelled) return;
+            console.error('[Couch Potatoes] household linking error', e);
+            setLinkStatus('error');
+          }
+        })();
+
+        return () => { cancelled = true; };
+      }, [consentStatus, authUser]);
+
+      // Reset the linking guard when the user signs out, so the next
+      // sign-in re-runs the effect.
+      useEffect(() => {
+        if (!authUser) {
+          linkAttemptedRef.current = false;
+          setLinkStatus('idle');
+          setLinkConflict(null);
+        }
+      }, [authUser]);
+
+      // Conflict resolution actions for <HouseholdLinkModal>.
+      // REVIEW: "use saved" reloads the page so all the state that hangs
+      // off householdIdRef gets re-bootstrapped cleanly. Smoother long-term
+      // would be to plumb a setHouseholdId() that re-runs the cloud-sync
+      // effects in place — punting that for now.
+      // ── Conflict resolution actions ──
+      // Used by the household-link modal for two distinct scenarios:
+      //   linkConflict.type === undefined  →  saved-household mismatch
+      //   linkConflict.type === 'full'     →  both slots taken on this device
+
+      const acceptSavedHousehold = () => {
+        if (!linkConflict) return;
+        try { localStorage.setItem('cp_householdId', linkConflict.savedHouseholdId); } catch {}
+        window.location.reload();
+      };
+      const keepLocalHousehold = () => {
+        // Leave membership row pointing at the saved (other) household.
+        // The user is intentionally choosing not to merge.
+        setLinkConflict(null);
+        setLinkStatus('ok');
+      };
+      // "Start fresh" — mint a brand-new household, claim slot 1, reload.
+      const startFreshHousehold = async () => {
+        const sb = window.cpSupabase;
+        if (!sb || !authUser) return;
+        try {
+          const freshId = 'cp_' + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
+          // Create the empty household row.
+          const { error: hhErr } = await sb.from('households').insert({ id: freshId, state: {} });
+          if (hhErr) { console.error('[Couch Potatoes] fresh household insert failed', hhErr); return; }
+          // Claim slot 1 for this user.
+          const { error: memErr } = await sb.from('household_members').insert({
+            user_id: authUser.id,
+            household_id: freshId,
+            slot: 1,
+          });
+          if (memErr) { console.error('[Couch Potatoes] fresh membership insert failed', memErr); return; }
+          try { localStorage.setItem('cp_householdId', freshId); } catch {}
+          window.location.reload();
+        } catch (e) {
+          console.error('[Couch Potatoes] startFreshHousehold error', e);
+        }
+      };
+
+      // Post-onboarding sign-in nudge — toast variant (Alex chose toast
+      // over banner, 2026-04-09). Shows once on the Recommendations screen
+      // when user has a profile but no account. Auto-dismisses after 8s.
+      // Dismissed permanently via localStorage so it doesn't nag.
+      const [signinNudgeDismissed, setSigninNudgeDismissed] = useState(() => {
+        try { return !!localStorage.getItem('cp_signinNudgeDismissed'); } catch { return false; }
+      });
+      const [signinNudgeVisible, setSigninNudgeVisible] = useState(false);
+      const dismissSigninNudge = () => {
+        try { localStorage.setItem('cp_signinNudgeDismissed', '1'); } catch {}
+        setSigninNudgeDismissed(true);
+        setSigninNudgeVisible(false);
+      };
+      // Show the toast once when landing on recs without auth.
+      useEffect(() => {
+        if (authUser || signinNudgeDismissed) return;
+        if (!(profile1.genres && profile1.genres.length > 0)) return;
+        if (screen !== S.RECOMMENDATIONS) { setSigninNudgeVisible(false); return; }
+        setSigninNudgeVisible(true);
+        const timer = setTimeout(() => {
+          dismissSigninNudge();
+        }, 8000);
+        return () => clearTimeout(timer);
+      }, [screen, authUser, signinNudgeDismissed]);
       const [tasteDNA, setTasteDNA] = useState(null);
       const [tasteDNA1, setTasteDNA1] = useState(saved?.tasteDNA1 || null);
       const [tasteDNA2, setTasteDNA2] = useState(saved?.tasteDNA2 || null);
@@ -3914,6 +4139,15 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                           Get Started
                         </button>
                         <p className="text-gray-600 text-xs mt-4 text-center">Stop scrolling. Start watching.</p>
+                        {/* Returning-user sign-in for new devices / signed-out users */}
+                        {!authUser && (
+                          <button
+                            onClick={signInWithGoogle}
+                            className="w-full mt-6 py-3 text-gray-400 hover:text-white text-[13.5px] font-medium transition-colors active:scale-95"
+                          >
+                            Already have an account? <span className="text-orange-300 underline underline-offset-2">Sign in</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </>
@@ -4668,6 +4902,10 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </button>
                   </div>
 
+                  {/* "Save to your account" CTA removed per Alex's feedback
+                      2026-04-09 — don't prompt account creation on the
+                      handoff screen; test placement with users later. */}
+
                   {(handoffShared || handoffCopied) ? (
                     <>
                       <div className="flex items-center justify-center gap-2 mb-3 text-emerald-400 text-sm font-medium">
@@ -4781,19 +5019,29 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               {/* ── Desktop nav (V3-B: centered brand, warm gradient) ── */}
               <div className="hidden md:block" style={{ background: "linear-gradient(180deg, rgba(40,20,25,0.6) 0%, rgba(30,15,20,0.2) 70%, transparent 100%)" }}>
                 <div className="grid items-center px-12 lg:px-16 py-3" style={{ maxWidth: 1280, margin: "0 auto", gridTemplateColumns: "1fr auto 1fr" }}>
-                  {/* Left: account avatar + names as profile trigger + watchlist */}
+                  {/* Left: sign-in/out + names as profile trigger + watchlist */}
                   <div className="flex items-center gap-3 min-w-0 justify-self-start">
-                    <button onClick={() => setAccountModal(true)}
-                      aria-label="Account"
-                      title={authUser ? `Signed in as ${authUser.email}` : "Sign in"}
-                      className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
-                      style={authUser
-                        ? { background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }
-                        : { background: "rgba(255,255,255,0.06)", color: "rgb(156,163,175)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                      {authUser
-                        ? (authUser.email?.[0] || "?").toUpperCase()
-                        : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>}
-                    </button>
+                    {authUser ? (
+                      <>
+                        <button onClick={() => setAccountModal(true)}
+                          aria-label="Account"
+                          title={`Signed in as ${authUser.email}`}
+                          className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
+                          style={{ background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }}>
+                          {(authUser.email?.[0] || "?").toUpperCase()}
+                        </button>
+                        <button onClick={signOut}
+                          className="text-[12px] text-gray-500 hover:text-gray-300 transition-colors active:scale-95 whitespace-nowrap">
+                          Sign out
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={signInWithGoogle}
+                        className="flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-white transition-colors active:scale-95 whitespace-nowrap font-medium">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+                        Sign in
+                      </button>
+                    )}
                     <button onClick={() => { setShowProfileSheet(true); try { window.history.pushState({ overlay: "profile" }, ""); } catch {} }}
                       className="text-sm text-gray-400 hover:text-white transition-colors active:scale-95 whitespace-nowrap">
                       {isSolo ? profile1.name : `${profile1.name} + ${profile2.name}`}
@@ -4832,16 +5080,19 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               {/* ── Mobile title row ── */}
               <div className="md:hidden px-5 pt-4 pb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setAccountModal(true)}
-                    aria-label="Account"
-                    className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
-                    style={authUser
-                      ? { background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }
-                      : { background: "rgba(255,255,255,0.06)", color: "rgb(156,163,175)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    {authUser
-                      ? (authUser.email?.[0] || "?").toUpperCase()
-                      : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>}
-                  </button>
+                  {authUser ? (
+                    <button onClick={() => setAccountModal(true)}
+                      aria-label="Account"
+                      className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
+                      style={{ background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }}>
+                      {(authUser.email?.[0] || "?").toUpperCase()}
+                    </button>
+                  ) : (
+                    <button onClick={signInWithGoogle}
+                      className="text-[12px] text-gray-400 hover:text-white transition-colors active:scale-95 font-medium whitespace-nowrap mr-1">
+                      Sign in
+                    </button>
+                  )}
                   <span className="text-base">🥔</span>
                   <span className="font-extrabold text-lg tracking-tight text-white/90">COUCH POTATOES</span>
                 </div>
@@ -4857,6 +5108,11 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   </button>
                 </div>
               </div>
+
+              {/* Sign-in nudge toast — floats at bottom of recs screen,
+                  auto-dismisses after 8s. Rendered here inside the recs
+                  block so it unmounts when navigating away. z-[55] keeps
+                  it below the toast (z-[60]) but above normal content. */}
 
               {chosenMovie && (
                 <div className="mx-5 md:mx-12 lg:mx-16 mb-3 bg-gradient-to-r from-rose-900/30 to-orange-900/20 border border-rose-700/20 rounded-2xl p-4" style={{ maxWidth: 1280, margin: "0 auto" }}>
@@ -5407,6 +5663,12 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </React.Fragment>
                   )}
 
+                  {/* Hide invite-partner CTA once profile2 has actually been
+                      filled in — at that point the household is paired and
+                      the button is misleading. `isSolo` lives at the top of
+                      the App() component (true when profile2.genres is
+                      empty). */}
+                  {isSolo && (
                   <div className="pt-4 border-t border-gray-800">
                     <button
                       onClick={async () => {
@@ -5459,6 +5721,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                     </button>
                     <p className="text-xs text-gray-500 mt-2 text-center">They'll fill out their half on their own device.</p>
                   </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -5569,6 +5832,75 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
             </div>
           )}
 
+          {/* ═══ HOUSEHOLD LINK CONFLICT MODAL ═══
+              Two scenarios share this shell:
+              1. Saved-household mismatch (linkConflict.type undefined):
+                 user's account points at household A but this device has
+                 household B. Options: pull saved household, or stay.
+              2. Household full (linkConflict.type === 'full'):
+                 both profile slots on this device's household are taken
+                 by other people. Options: start a fresh household, or
+                 sign in with an existing account that already has one.
+              z-[70] above Account (z-50) and toast (z-[60]). */}
+          {linkStatus === 'conflict' && linkConflict && (
+            <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center">
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-md fade-in" />
+              <div className="relative w-full md:w-[460px] bg-gray-900 border border-gray-700 md:rounded-2xl rounded-t-3xl flex flex-col slide-up md:fade-in">
+                <div className="px-6 py-5">
+                  {linkConflict.type === 'full' ? (
+                    <>
+                      <h2 className="text-lg font-semibold text-gray-100 mb-2">This household is full</h2>
+                      <p className="text-[13.5px] text-gray-400 leading-relaxed mb-4">
+                        This device belongs to <span className="text-gray-200">{linkConflict.profile1Name}</span> and <span className="text-gray-200">{linkConflict.profile2Name}</span>. Both profile slots are taken.
+                      </p>
+                      <p className="text-[13px] text-gray-500 leading-relaxed mb-5">
+                        You can start a fresh household for your own account, or if you already have an account, sign out and sign back in with that account.
+                      </p>
+                      <div className="flex flex-col gap-2.5">
+                        <button
+                          onClick={startFreshHousehold}
+                          className="w-full py-3.5 rounded-xl font-semibold text-[15px] bg-gradient-to-r from-rose-400 to-orange-500 text-white shadow-lg shadow-rose-900/40 active:scale-[0.99]"
+                        >
+                          Start a fresh household
+                        </button>
+                        <button
+                          onClick={async () => { try { await signOut(); } catch {} setLinkConflict(null); setLinkStatus('idle'); linkAttemptedRef.current = false; }}
+                          className="w-full py-3 rounded-xl text-[14px] text-gray-300 bg-gray-800 border border-gray-700 active:scale-[0.99]"
+                        >
+                          Sign out and use a different account
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-lg font-semibold text-gray-100 mb-2">Use your saved household?</h2>
+                      <p className="text-[13.5px] text-gray-400 leading-relaxed mb-4">
+                        You're signed in as <span className="text-gray-200">{authUser?.email}</span>. Your account is already linked to a different household than the one on this device.
+                      </p>
+                      <p className="text-[13px] text-gray-500 leading-relaxed mb-5">
+                        Pulling your saved household will replace what's on this device. Staying on this device leaves your saved household alone — you can switch later from the Account menu.
+                      </p>
+                      <div className="flex flex-col gap-2.5">
+                        <button
+                          onClick={acceptSavedHousehold}
+                          className="w-full py-3.5 rounded-xl font-semibold text-[15px] bg-gradient-to-r from-rose-400 to-orange-500 text-white shadow-lg shadow-rose-900/40 active:scale-[0.99]"
+                        >
+                          Use my saved household
+                        </button>
+                        <button
+                          onClick={keepLocalHousehold}
+                          className="w-full py-3 rounded-xl text-[14px] text-gray-300 bg-gray-800 border border-gray-700 active:scale-[0.99]"
+                        >
+                          Stay on this device
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ═══ RESET CONFIRMATION ═══ */}
           {showResetConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -5645,6 +5977,34 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
           {toastMsg && (
             <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-3 rounded-lg text-xs z-[60] fade-in break-words" style={{ maxWidth: "85vw", minWidth: 200 }}>
               {toastMsg}
+            </div>
+          )}
+
+          {/* Sign-in / create-account nudge toast. z-[55] sits below
+              the app toast (z-[60]) so error messages still win. */}
+          {signinNudgeVisible && (
+            <div className="fixed bottom-5 left-4 right-4 md:left-auto md:right-6 md:w-[420px] z-[55] slide-up">
+              <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-gray-900/95 border border-gray-700 shadow-2xl shadow-black/60 backdrop-blur-lg">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] text-gray-100">
+                    <span className="font-semibold">Create an account or sign in</span>
+                    {' '}<span className="text-gray-400">so you never lose your profiles and watchlist</span>
+                  </div>
+                </div>
+                <button
+                  onClick={signInWithGoogle}
+                  className="flex-shrink-0 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-rose-500 to-orange-500 text-white text-[12px] font-semibold active:scale-95"
+                >
+                  Sign in
+                </button>
+                <button
+                  onClick={dismissSigninNudge}
+                  aria-label="Dismiss"
+                  className="flex-shrink-0 p-1 text-gray-500 hover:text-gray-300 active:scale-95"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
             </div>
           )}
         </div>
