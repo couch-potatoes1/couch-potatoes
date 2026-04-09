@@ -2040,6 +2040,11 @@ Output ONLY the line.`;
           await sb.auth.signOut();
           setAccountModal(false);
           setToastMsg("Signed out");
+          // Stamp sign-out time so the "sign in" toast doesn't nag
+          // immediately — it'll wait 24hrs before reappearing.
+          try { localStorage.setItem('cp_signedOutAt', String(Date.now())); } catch {}
+          // Also re-check the cooldown so the current session respects it.
+          setSigninNudgeDismissed(true);
         } catch (e) {
           console.error("[Couch Potatoes] sign-out failed", e);
         }
@@ -2086,6 +2091,12 @@ Output ONLY the line.`;
               return;
             }
             setConsentStatus(data ? 'ok' : 'needed');
+            // Returning user on the welcome page — skip straight to recs.
+            // We do this here (not just in a useEffect) because the effect
+            // can miss the state change due to React batching/timing.
+            if (data && screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
+              goTo(S.SESSION_PREFS);
+            }
           } catch (e) {
             if (cancelled) return;
             console.error('[Couch Potatoes] consent check error', e);
@@ -2121,6 +2132,10 @@ Output ONLY the line.`;
           setConsentStatus('ok');
           setConsentTerms(false);
           setConsentMarketing(false);
+          // First-time user accepted consent on the welcome page — skip to recs.
+          if (screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
+            goTo(S.SESSION_PREFS);
+          }
         } catch (e) {
           console.error('[Couch Potatoes] consent insert error', e);
           setToastMsg("Couldn't save — try again");
@@ -2355,11 +2370,27 @@ Output ONLY the line.`;
       };
 
       // Post-onboarding sign-in nudge — toast variant (Alex chose toast
-      // over banner, 2026-04-09). Shows once on the Recommendations screen
-      // when user has a profile but no account. Auto-dismisses after 8s.
-      // Dismissed permanently via localStorage so it doesn't nag.
+      // over banner, 2026-04-09). Shows on the Recommendations screen when
+      // user has a profile but no account. Stays until user taps X.
+      //
+      // Edge cases (Alex, 2026-04-09):
+      //   • After sign-out, don't show the toast immediately — wait 24hrs.
+      //     We store a timestamp in localStorage on sign-out and compare.
+      //   • If the user signs in while the toast is visible, hide it
+      //     instantly (the authUser check handles this).
+      //   • Dismissing via X is permanent (localStorage flag).
       const [signinNudgeDismissed, setSigninNudgeDismissed] = useState(() => {
-        try { return !!localStorage.getItem('cp_signinNudgeDismissed'); } catch { return false; }
+        try {
+          // Permanent dismiss (user tapped X)
+          if (localStorage.getItem('cp_signinNudgeDismissed')) return true;
+          // 24hr cooldown after sign-out
+          const signedOutAt = localStorage.getItem('cp_signedOutAt');
+          if (signedOutAt) {
+            const elapsed = Date.now() - parseInt(signedOutAt, 10);
+            if (elapsed < 24 * 60 * 60 * 1000) return true; // within 24hrs
+          }
+          return false;
+        } catch { return false; }
       });
       const [signinNudgeVisible, setSigninNudgeVisible] = useState(false);
       const dismissSigninNudge = () => {
@@ -2367,11 +2398,11 @@ Output ONLY the line.`;
         setSigninNudgeDismissed(true);
         setSigninNudgeVisible(false);
       };
-      // Show the toast when on recs without auth. Stays until user
-      // taps X — no auto-dismiss. Hides if they navigate away from recs,
-      // reappears if they come back (until dismissed permanently).
+      // Show/hide the toast based on auth state and screen.
       useEffect(() => {
-        if (authUser || signinNudgeDismissed) return;
+        // Hide immediately when user signs in.
+        if (authUser) { setSigninNudgeVisible(false); return; }
+        if (signinNudgeDismissed) return;
         if (!(profile1.genres && profile1.genres.length > 0)) return;
         if (screen !== S.RECOMMENDATIONS) { setSigninNudgeVisible(false); return; }
         setSigninNudgeVisible(true);
