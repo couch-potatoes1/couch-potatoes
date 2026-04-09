@@ -2203,10 +2203,8 @@ Output ONLY the line.`;
         if (consentStatus !== 'ok') return;
         if (!authUser) return;
         if (screen !== S.WELCOME) return;
-        if (profile1.genres && profile1.genres.length > 0) {
-          goTo(categories.length > 0 ? S.RECOMMENDATIONS : S.SESSION_PREFS);
-        }
-      }, [consentStatus, authUser, screen, profile1, categories]);
+        setScreen(S.RECOMMENDATIONS);
+      }, [consentStatus, authUser, screen]);
 
       // ═════════════════════════════════════════════════════════════════════
       // HOUSEHOLD LINKING ON SIGN-IN  ⚠️ REVIEW: drafted 2026-04-08, untested
