@@ -2139,6 +2139,21 @@ Output ONLY the line.`;
         setConsentMarketing(false);
       };
 
+      // After sign-in completes (consent OK), if the user is still on the
+      // welcome/landing screen and has a profile, skip them straight to
+      // recommendations. This covers the case where a returning user taps
+      // "Sign in" on the splash page — they shouldn't have to manually
+      // navigate past a screen they've already seen.
+      useEffect(() => {
+        if (consentStatus !== 'ok') return;
+        if (!authUser) return;
+        if (screen !== S.WELCOME) return;
+        // Only skip ahead if they have a real profile (genres filled in).
+        if (profile1.genres && profile1.genres.length > 0) {
+          goTo(S.SESSION_PREFS);
+        }
+      }, [consentStatus, authUser, screen]);
+
       // ═════════════════════════════════════════════════════════════════════
       // HOUSEHOLD LINKING ON SIGN-IN  ⚠️ REVIEW: drafted 2026-04-08, untested
       // ─────────────────────────────────────────────────────────────────────
@@ -2352,16 +2367,14 @@ Output ONLY the line.`;
         setSigninNudgeDismissed(true);
         setSigninNudgeVisible(false);
       };
-      // Show the toast once when landing on recs without auth.
+      // Show the toast when on recs without auth. Stays until user
+      // taps X — no auto-dismiss. Hides if they navigate away from recs,
+      // reappears if they come back (until dismissed permanently).
       useEffect(() => {
         if (authUser || signinNudgeDismissed) return;
         if (!(profile1.genres && profile1.genres.length > 0)) return;
         if (screen !== S.RECOMMENDATIONS) { setSigninNudgeVisible(false); return; }
         setSigninNudgeVisible(true);
-        const timer = setTimeout(() => {
-          dismissSigninNudge();
-        }, 8000);
-        return () => clearTimeout(timer);
       }, [screen, authUser, signinNudgeDismissed]);
       const [tasteDNA, setTasteDNA] = useState(null);
       const [tasteDNA1, setTasteDNA1] = useState(saved?.tasteDNA1 || null);
@@ -5022,19 +5035,13 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
                   {/* Left: sign-in/out + names as profile trigger + watchlist */}
                   <div className="flex items-center gap-3 min-w-0 justify-self-start">
                     {authUser ? (
-                      <>
-                        <button onClick={() => setAccountModal(true)}
-                          aria-label="Account"
-                          title={`Signed in as ${authUser.email}`}
-                          className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
-                          style={{ background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }}>
-                          {(authUser.email?.[0] || "?").toUpperCase()}
-                        </button>
-                        <button onClick={signOut}
-                          className="text-[12px] text-gray-500 hover:text-gray-300 transition-colors active:scale-95 whitespace-nowrap">
-                          Sign out
-                        </button>
-                      </>
+                      <button onClick={() => setAccountModal(true)}
+                        aria-label="Account"
+                        title={`Signed in as ${authUser.email}`}
+                        className="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors active:scale-95"
+                        style={{ background: "linear-gradient(135deg,#fb7185,#f97316)", color: "white" }}>
+                        {(authUser.email?.[0] || "?").toUpperCase()}
+                      </button>
                     ) : (
                       <button onClick={signInWithGoogle}
                         className="flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-white transition-colors active:scale-95 whitespace-nowrap font-medium">
@@ -5987,8 +5994,8 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
               <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-gray-900/95 border border-gray-700 shadow-2xl shadow-black/60 backdrop-blur-lg">
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] text-gray-100">
-                    <span className="font-semibold">Create an account or sign in</span>
-                    {' '}<span className="text-gray-400">so you never lose your profiles and watchlist</span>
+                    Never lose your taste profile.{' '}
+                    <span className="text-gray-400">Create an account or sign in.</span>
                   </div>
                 </div>
                 <button
