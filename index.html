@@ -2091,11 +2091,16 @@ Output ONLY the line.`;
               return;
             }
             setConsentStatus(data ? 'ok' : 'needed');
-            // Returning user on the welcome page — skip straight to recs.
-            // We do this here (not just in a useEffect) because the effect
-            // can miss the state change due to React batching/timing.
-            if (data && screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
-              goTo(S.SESSION_PREFS);
+            // A signed-in user with consent should never see the welcome
+            // splash — it's for anonymous first-timers. Redirect them:
+            //   • Has a profile → session prefs (entry to recs)
+            //   • No profile yet → onboarding setup
+            if (data && screen === S.WELCOME) {
+              if (profile1.genres && profile1.genres.length > 0) {
+                goTo(S.SESSION_PREFS);
+              } else {
+                goTo(S.SETUP);
+              }
             }
           } catch (e) {
             if (cancelled) return;
@@ -2132,9 +2137,13 @@ Output ONLY the line.`;
           setConsentStatus('ok');
           setConsentTerms(false);
           setConsentMarketing(false);
-          // First-time user accepted consent on the welcome page — skip to recs.
-          if (screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
-            goTo(S.SESSION_PREFS);
+          // Just accepted consent on the welcome page — move them along.
+          if (screen === S.WELCOME) {
+            if (profile1.genres && profile1.genres.length > 0) {
+              goTo(S.SESSION_PREFS);
+            } else {
+              goTo(S.SETUP);
+            }
           }
         } catch (e) {
           console.error('[Couch Potatoes] consent insert error', e);
@@ -2154,20 +2163,20 @@ Output ONLY the line.`;
         setConsentMarketing(false);
       };
 
-      // After sign-in completes (consent OK), if the user is still on the
-      // welcome/landing screen and has a profile, skip them straight to
-      // recommendations. This covers the case where a returning user taps
-      // "Sign in" on the splash page — they shouldn't have to manually
-      // navigate past a screen they've already seen.
+      // A signed-in user with consent should never sit on the welcome
+      // splash. This effect catches cases where the inline redirect (in
+      // the consent check / submitConsent) missed — e.g. if profile1
+      // arrived late from cloud sync.
       useEffect(() => {
         if (consentStatus !== 'ok') return;
         if (!authUser) return;
         if (screen !== S.WELCOME) return;
-        // Only skip ahead if they have a real profile (genres filled in).
         if (profile1.genres && profile1.genres.length > 0) {
           goTo(S.SESSION_PREFS);
+        } else {
+          goTo(S.SETUP);
         }
-      }, [consentStatus, authUser, screen]);
+      }, [consentStatus, authUser, screen, profile1]);
 
       // ═════════════════════════════════════════════════════════════════════
       // HOUSEHOLD LINKING ON SIGN-IN  ⚠️ REVIEW: drafted 2026-04-08, untested
