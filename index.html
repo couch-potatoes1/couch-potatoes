@@ -2091,16 +2091,13 @@ Output ONLY the line.`;
               return;
             }
             setConsentStatus(data ? 'ok' : 'needed');
-            // A signed-in user with consent should never see the welcome
-            // splash — it's for anonymous first-timers. Redirect them:
-            //   • Has a profile → session prefs (entry to recs)
-            //   • No profile yet → onboarding setup
-            if (data && screen === S.WELCOME) {
-              if (profile1.genres && profile1.genres.length > 0) {
-                goTo(S.SESSION_PREFS);
-              } else {
-                goTo(S.SETUP);
-              }
+            // If they already have a local profile, skip the welcome
+            // screen and go straight to recs. If no local profile yet
+            // (new device — data loading from cloud sync), stay on
+            // welcome; the useEffect below will catch profile1 arriving
+            // from cloud sync and redirect then.
+            if (data && screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
+              goTo(S.SESSION_PREFS);
             }
           } catch (e) {
             if (cancelled) return;
@@ -2137,13 +2134,11 @@ Output ONLY the line.`;
           setConsentStatus('ok');
           setConsentTerms(false);
           setConsentMarketing(false);
-          // Just accepted consent on the welcome page — move them along.
-          if (screen === S.WELCOME) {
-            if (profile1.genres && profile1.genres.length > 0) {
-              goTo(S.SESSION_PREFS);
-            } else {
-              goTo(S.SETUP);
-            }
+          // Just accepted consent on the welcome page — redirect if
+          // they have a local profile. Otherwise stay; cloud sync will
+          // populate profile1 and the useEffect will catch it.
+          if (screen === S.WELCOME && profile1.genres && profile1.genres.length > 0) {
+            goTo(S.SESSION_PREFS);
           }
         } catch (e) {
           console.error('[Couch Potatoes] consent insert error', e);
@@ -2163,18 +2158,15 @@ Output ONLY the line.`;
         setConsentMarketing(false);
       };
 
-      // A signed-in user with consent should never sit on the welcome
-      // splash. This effect catches cases where the inline redirect (in
-      // the consent check / submitConsent) missed — e.g. if profile1
-      // arrived late from cloud sync.
+      // Catch late-loaded profile data from cloud sync. If a signed-in
+      // user with consent is still on welcome when profile1 arrives
+      // from Supabase, redirect them to recs.
       useEffect(() => {
         if (consentStatus !== 'ok') return;
         if (!authUser) return;
         if (screen !== S.WELCOME) return;
         if (profile1.genres && profile1.genres.length > 0) {
           goTo(S.SESSION_PREFS);
-        } else {
-          goTo(S.SETUP);
         }
       }, [consentStatus, authUser, screen, profile1]);
 
@@ -6022,7 +6014,7 @@ Respond in JSON only: { "titles": ["Title1", "Title2"], "genres": [28, 12], "key
 
           {/* ═══ TOAST MESSAGE ═══ */}
           {toastMsg && (
-            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-3 rounded-lg text-xs z-[60] fade-in break-words" style={{ maxWidth: "85vw", minWidth: 200 }}>
+            <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-5 py-2.5 rounded-xl text-sm z-[60] fade-in text-center" style={{ maxWidth: "85vw" }}>
               {toastMsg}
             </div>
           )}
