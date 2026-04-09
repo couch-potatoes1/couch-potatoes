@@ -2291,12 +2291,17 @@ Output ONLY the line.`;
               return;
             }
 
+            // Prefer the slot this device already occupies (the user who
+            // filled out the profile is almost certainly the one signing in).
+            const localSlot = (() => { try { const s = parseInt(localStorage.getItem("cp_mySlot"), 10); return (s === 1 || s === 2) ? s : null; } catch { return null; } })();
+
             const slot1Taken = !!(hh && hh.profile1 && (hh.profile1.name || (hh.profile1.genres && hh.profile1.genres.length)));
             const slot2Taken = !!(hh && hh.profile2 && (hh.profile2.name || (hh.profile2.genres && hh.profile2.genres.length)));
 
             let chosenSlot;
-            if (!slot1Taken)      chosenSlot = 1;
-            else if (!slot2Taken) chosenSlot = 2;
+            if (localSlot)                chosenSlot = localSlot;
+            else if (!slot1Taken)         chosenSlot = 1;
+            else if (!slot2Taken)         chosenSlot = 2;
             else {
               // Both slots filled and this user has no membership row →
               // they're a third person signing in on a couple's device.
